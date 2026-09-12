@@ -1162,6 +1162,10 @@
     fever: 0, // 0..1
     feverActive: false,
     nearMisses: 0,
+    nearChain: 0,
+    nearChainT: 0,
+    megaFever: false,
+    clutchUsed: false,
     shield: 0,
     magnet: 0,
     doublePts: 0,
@@ -1266,6 +1270,10 @@
       this.fever = 0;
       this.feverActive = false;
       this.nearMisses = 0;
+      this.nearChain = 0;
+      this.nearChainT = 0;
+      this.megaFever = false;
+      this.clutchUsed = false;
       this.shield = 0;
       this.magnet = 0;
       this.doublePts = 0;
@@ -1391,7 +1399,8 @@
     },
 
     addScore(n, x, y, label, color) {
-      const mult = (this.feverActive ? 2 : 1) * (this.doublePts > 0 ? 2 : 1);
+      const feverM = this.megaFever ? 3 : this.feverActive ? 2 : 1;
+      const mult = feverM * (this.doublePts > 0 ? 2 : 1);
       const v = Math.floor(n * mult);
       this.score += v;
       if (x != null) {
@@ -1443,14 +1452,28 @@
         if (this.fever >= 1) {
           this.feverActive = true;
           this.fever = 1;
+          this.megaFever = false;
           bumpMission("fever", 1);
           Music.setMode("fever");
           this.notice = t("fever");
           this.noticeT = 2;
+          this.hitFlash = 0.4;
+          this.shake = Math.max(this.shake, 4);
           beep(784, 0.1, "triangle", 0.05);
           setTimeout(() => beep(988, 0.1, "triangle", 0.05), 80);
           setTimeout(() => beep(1175, 0.15, "triangle", 0.05), 160);
         }
+      } else if (this.feverActive && !this.megaFever && this.combo >= 15) {
+        // メガフィーバー（×3）
+        this.megaFever = true;
+        this.fever = 1;
+        this.notice = Playables.lang === "en" ? "MEGA FEVER ×3!" : "メガフィーバー ×3！";
+        this.noticeT = 2.2;
+        this.shake = 10;
+        this.speedLines = 1;
+        beep(880, 0.1, "square", 0.05);
+        setTimeout(() => beep(1108, 0.1, "square", 0.05), 90);
+        setTimeout(() => beep(1318, 0.18, "square", 0.045), 180);
       }
       this.addScore(base, c.x, c.y - 20, "+" + base, this.feverActive ? "#ffe066" : "#ffd56a");
       this.coinFlash = 1;
@@ -1499,12 +1522,40 @@
       }
       this.combo = 0;
       this.comboTimer = 0;
+      this.megaFever = false;
       if (this.feverActive) {
         this.feverActive = false;
         this.fever = 0;
       } else {
         this.fever = Math.max(0, this.fever - 0.35);
       }
+    },
+
+    /** コイン 25 を払って 1 回だけ復活（広告の代わりに選べる） */
+    tryClutch() {
+      if (this.clutchUsed) return false;
+      if (Playables.totalCoins < 25) return false;
+      Playables.totalCoins -= 25;
+      Playables.persist();
+      this.clutchUsed = true;
+      const p = this.player;
+      p.y = this.groundY - p.h - 10;
+      p.vy = 0;
+      p.onGround = true;
+      p.jumps = 0;
+      p.diving = false;
+      p.invuln = 2.2;
+      this.shield = Math.max(this.shield, 1);
+      this.obstacles = this.obstacles.filter((o) => o.x > this.player.x + 180);
+      this.birds = this.birds.filter((b) => b.x > this.player.x + 180);
+      this.breakCombo();
+      this.notice = Playables.lang === "en" ? "CLUTCH! -25C revive" : "クラッチ！ -25C で復活";
+      this.noticeT = 1.8;
+      this.shake = 8;
+      beep(392, 0.08, "triangle", 0.05);
+      setTimeout(() => beep(523, 0.1, "triangle", 0.045), 80);
+      setTimeout(() => beep(659, 0.14, "triangle", 0.04), 160);
+      return true;
     },
 
     async gameOver() {
@@ -1916,6 +1967,13 @@
       }
       if (this.magnet > 0) this.magnet -= dt;
       if (this.doublePts > 0) this.doublePts -= dt;
+      // フィーバー中は自動マグネット
+      if (this.feverActive) this.magnet = Math.max(this.magnet, 0.5);
+      // ニアミス連鎖タイマー
+      if (this.nearChainT > 0) {
+        this.nearChainT -= dt;
+        if (this.nearChainT <= 0) this.nearChain = 0;
+      }
       checkBadges(this);
 
       // 物理
@@ -2065,10 +2123,25 @@
           const nearWin = (o.h + 24) * skinAbil().near;
           if (gapX < 20 * skinAbil().near && distY < nearWin) {
             this.nearMisses++;
-            this.addScore(35, p.x + 30, p.y - 10, t("nearMiss") + " +35", "#7dffa8");
-            this.fever = Math.min(1, this.fever + 0.15);
+            this.nearChain++;
+            this.nearChainT = 1.8;
+            const ch = Math.min(this.nearChain, 8);
+            const nearScore = 35 + (ch - 1) * 15;
+            this.addScore(
+              nearScore,
+              p.x + 30,
+              p.y - 10,
+              ch >= 2
+                ? t("nearMiss") + " ×" + ch + " +" + nearScore
+                : t("nearMiss") + " +" + nearScore,
+              "#7dffa8"
+            );
+            this.fever = Math.min(1, this.fever + 0.12 + ch * 0.02);
             bumpMission("near", 1);
             this.triggerSlowmo();
+            if (ch >= 3) {
+              this.shake = Math.max(this.shake, 3 + ch);
+            }
           }
         }
 
@@ -2107,6 +2180,7 @@
             beep(300, 0.12, "square", 0.04);
             continue;
           }
+          if (this.tryClutch()) continue;
           this.gameOver();
           return;
         }
@@ -2164,6 +2238,7 @@
             this.noticeT = 1.2;
             continue;
           }
+          if (this.tryClutch()) continue;
           this.gameOver();
           return;
         }
@@ -2453,8 +2528,9 @@
       }
       if (this.feverActive) {
         const pulse = 0.35 + Math.sin(this.time * 8) * 0.15;
-        ctx.strokeStyle = `rgba(255,200,60,${pulse})`;
-        ctx.lineWidth = 8;
+        const col = this.megaFever ? "rgba(255,80,0," : "rgba(255,200,60,";
+        ctx.strokeStyle = col + pulse + ")";
+        ctx.lineWidth = this.megaFever ? 12 : 8;
         ctx.strokeRect(4, 4, W - 8, H - 8);
       }
 
