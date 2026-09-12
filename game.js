@@ -1658,9 +1658,11 @@
         }
       }
 
-      // 残像
+      // 残像（ダッシュ中だけ・上限あり）
       if (this.dash > 0 || p.diving) {
-        this.afterimages.push({ x: p.x, y: p.y, life: 0.22, max: 0.22 });
+        if (this.afterimages.length < 12 && Math.random() < 0.7) {
+          this.afterimages.push({ x: p.x, y: p.y, life: 0.18, max: 0.18 });
+        }
       }
       for (let i = this.afterimages.length - 1; i >= 0; i--) {
         this.afterimages[i].life -= dt;
@@ -2573,33 +2575,39 @@
       ctx.restore();
     },
 
-    /** ベスト走行のゴースト */
+    /** ベスト走行のゴースト（後ろに薄く表示・残像と区別） */
     drawGhost() {
       const g = Playables.ghost;
       if (!g || !g.ys || !g.ys.length) return;
-      const idx = Math.floor((this._runTime || 0) / 0.12);
+      const rt = this._runTime || 0;
+      // 開始直後は出さない（残像と混ざるため）
+      if (rt < 0.8) return;
+      const idx = Math.floor(rt / 0.12);
       if (idx >= g.ys.length) return;
       const y = g.ys[idx];
-      const x = this.player.x;
       const p = this.player;
+      // 本体より少し後ろ・半透明の輪郭だけ
+      const x = p.x - 36;
+      const fade = idx > g.ys.length - 8 ? (g.ys.length - idx) / 8 : 1;
       ctx.save();
-      ctx.globalAlpha = 0.32;
-      const skin = SKINS[Playables.skin] || SKINS[0];
-      ctx.fillStyle = skin.body[1];
-      ctx.beginPath();
-      ctx.arc(x + p.w / 2, y + p.h / 2, p.w * 0.46, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(90,70,110,0.5)";
-      ctx.beginPath();
-      ctx.arc(x + p.w / 2 - 7, y + p.h / 2 - 2, 2.5, 0, Math.PI * 2);
-      ctx.arc(x + p.w / 2 + 7, y + p.h / 2 - 2, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 0.2;
-      ctx.strokeStyle = skin.body[2];
+      ctx.globalAlpha = 0.22 * fade;
+      ctx.strokeStyle = "rgba(120,160,220,0.95)";
       ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
       ctx.beginPath();
-      ctx.arc(x + p.w / 2, y + p.h / 2, p.w * 0.52, 0, Math.PI * 2);
+      ctx.arc(x + p.w / 2, y + p.h / 2, p.w * 0.44, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(120,160,220,0.35)";
+      ctx.beginPath();
+      ctx.arc(x + p.w / 2, y + p.h / 2, p.w * 0.42, 0, Math.PI * 2);
+      ctx.fill();
+      // 目だけ薄く
+      ctx.fillStyle = "rgba(70,90,130,0.5)";
+      ctx.beginPath();
+      ctx.arc(x + p.w / 2 - 6, y + p.h / 2 - 2, 2, 0, Math.PI * 2);
+      ctx.arc(x + p.w / 2 + 6, y + p.h / 2 - 2, 2, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     },
 
