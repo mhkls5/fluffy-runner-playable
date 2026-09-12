@@ -1604,11 +1604,16 @@
       }
       const fromLeft = Math.random() < 0.5;
       const scale = type === "ojisan" ? 1.15 : 0.85 + Math.random() * 0.25;
+      // おじさんは追跡用に遅め（プレイヤーより僅かに遅いくらい）
+      const baseVx =
+        type === "ojisan"
+          ? this.speed * 0.38 + 20
+          : this.speed * 0.55 + 40 + Math.random() * 50;
       this.cameos.push({
         type,
         x: fromLeft ? -80 : W + 80,
         y: this.groundY - 8,
-        vx: (fromLeft ? 1 : -1) * (this.speed * 0.55 + 40 + Math.random() * 50),
+        vx: (fromLeft ? 1 : -1) * baseVx,
         scale,
         bob: Math.random() * 6,
         bobSpeed: 6 + Math.random() * 4,
@@ -2079,6 +2084,11 @@
       }
       for (let i = this.cameos.length - 1; i >= 0; i--) {
         const g = this.cameos[i];
+        // おじさんは追跡しやすいよう一定の遅い速度を保つ
+        if (g.chaseable && !g.caught) {
+          const dir = g.vx >= 0 ? 1 : -1;
+          g.vx = dir * Math.max(120, this.speed * 0.42);
+        }
         g.x += g.vx * gdt;
         g.bob += dt * g.bobSpeed;
         g.frame += dt * 10;
@@ -2091,15 +2101,15 @@
             got: false,
           });
         }
-        // おじさん追跡：触れると捕獲ボーナス
+        // おじさん追跡：触れると捕獲ボーナス（判定は大きめ）
         if (g.chaseable && !g.caught) {
-          const gw = 40 * (g.scale || 1);
-          const gh = 70 * (g.scale || 1);
+          const gw = 48 * (g.scale || 1);
+          const gh = 78 * (g.scale || 1);
           if (
-            p.x + p.w - 6 > g.x - gw * 0.4 &&
-            p.x + 6 < g.x + gw * 0.6 &&
-            p.y + p.h > g.y - gh &&
-            p.y < g.y + 10
+            p.x + p.w - 2 > g.x - gw * 0.55 &&
+            p.x + 2 < g.x + gw * 0.75 &&
+            p.y + p.h + 4 > g.y - gh &&
+            p.y - 4 < g.y + 14
           ) {
             g.caught = true;
             this._caughtUncle = (this._caughtUncle || 0) + 1;
