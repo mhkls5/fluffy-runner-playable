@@ -37,6 +37,8 @@
     equipHat: 0,
     equipTrail: 0,
     equipCharm: 0,
+    lifetimeCoins: 0,
+    ghost: null, // { score, samples: [{d,y}] }
     savedLoaded: false,
 
     _lsKey: "fluffy-runner-save-v1",
@@ -67,6 +69,8 @@
         equipHat: this.equipHat,
         equipTrail: this.equipTrail,
         equipCharm: this.equipCharm,
+        lifetimeCoins: this.lifetimeCoins,
+        ghost: this.ghost,
       };
     },
 
@@ -108,6 +112,8 @@
       if (typeof d.equipHat === "number") this.equipHat = d.equipHat;
       if (typeof d.equipTrail === "number") this.equipTrail = d.equipTrail;
       if (typeof d.equipCharm === "number") this.equipCharm = d.equipCharm;
+      if (typeof d.lifetimeCoins === "number") this.lifetimeCoins = d.lifetimeCoins;
+      if (d.ghost && Array.isArray(d.ghost.samples)) this.ghost = d.ghost;
     },
 
     loadLocal() {
@@ -184,6 +190,7 @@
 
     async addCoins(n) {
       this.totalCoins += n;
+      if (n > 0) this.lifetimeCoins = (this.lifetimeCoins || 0) + n;
       await this.persist();
     },
 
@@ -716,6 +723,25 @@
     };
   }
 
+  /** スキン進化段階 0-3（累計コイン） */
+  function skinStage(skinIdx) {
+    const lc = Playables.lifetimeCoins || 0;
+    // 進化の閾値はスキンの価格帯で少し変える
+    const base = [80, 150, 250, 400, 600];
+    const b = base[skinIdx] || 80;
+    if (lc >= b * 6) return 3;
+    if (lc >= b * 3) return 2;
+    if (lc >= b) return 1;
+    return 0;
+  }
+
+  function skinStageLabel(stage) {
+    if (stage >= 3) return "Ω";
+    if (stage === 2) return "★★";
+    if (stage === 1) return "★";
+    return "";
+  }
+
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
   let W = 0,
@@ -1115,6 +1141,9 @@
       this._rank = 0;
       this._riskActive = 0;
       this._sawUncle = false;
+      this._ghostRec = [];
+      this._ghostAcc = 0;
+      this._runTime = 0;
       const p = this.player;
       p.y = this.groundY - p.h;
       p.vy = 0;
@@ -1323,6 +1352,10 @@
       await Playables.addCoins(gained);
       if (final > Playables.bestScore) {
         Playables.bestScore = final;
+        // ベスト更新時にゴーストを保存
+        if (this._ghostRec && this._ghostRec.length > 10) {
+          Playables.ghost = { score: final, ys: this._ghostRec.slice(0, 250) };
+        }
         await Playables.persist();
       }
       checkBadges(this);
@@ -1606,11 +1639,21 @@
 
       // プレイ中だけ timeScale 適用
       const gdt = dt * this.timeScale;
+      this._runTime = (this._runTime || 0) + gdt;
 
       const p = this.player;
       p.invuln = Math.max(0, p.invuln - dt);
       this.dash = Math.max(0, this.dash - dt);
       this.dashCd = Math.max(0, this.dashCd - dt);
+
+      // ゴースト記録（0.12s間隔・最大250サンプル ≈ 30秒）
+      this._ghostAcc += gdt;
+      if (this._ghostAcc >= 0.12) {
+        this._ghostAcc = 0;
+        if (this._ghostRec.length < 250) {
+          this._ghostRec.push(Math.round(p.y));
+        }
+      }
 
       // 残像
       if (this.dash > 0 || p.diving) {
@@ -2099,6 +2142,8 @@
       for (const o of this.obstacles) this.drawObstacle(o);
       for (const b of this.birds) this.drawBird(b);
 
+      if (this.state === "playing") this.drawGhost();
+
       // 残像
       for (const a of this.afterimages) {
         const t = a.life / a.max;
@@ -2376,6 +2421,8 @@
       ctx.scale(sx, sy);
       ctx.translate(-cx, -cy);
 
+      this.drawEvoFx(cx, cy, p.w * 0.5, skinStage(Playables.skin));
+
       // フィーバー光
       if (this.feverActive) {
         ctx.fillStyle = "rgba(255,220,80,0.25)";
@@ -2523,10 +2570,79 @@
       ctx.restore();
     },
 
+    /** ベスト走行のゴースト */
+    drawGhost() {
+      const g = Playables.ghost;
+      if (!g || !g.ys || !g.ys.length) return;
+      const idx = Math.floor((this._runTime || 0) / 0.12);
+      if (idx >= g.ys.length) return;
+      const y = g.ys[idx];
+      const x = this.player.x;
+      const p = this.player;
+      ctx.save();
+      ctx.globalAlpha = 0.32;
+      const skin = SKINS[Playables.skin] || SKINS[0];
+      ctx.fillStyle = skin.body[1];
+      ctx.beginPath();
+      ctx.arc(x + p.w / 2, y + p.h / 2, p.w * 0.46, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(90,70,110,0.5)";
+      ctx.beginPath();
+      ctx.arc(x + p.w / 2 - 7, y + p.h / 2 - 2, 2.5, 0, Math.PI * 2);
+      ctx.arc(x + p.w / 2 + 7, y + p.h / 2 - 2, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.2;
+      ctx.strokeStyle = skin.body[2];
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x + p.w / 2, y + p.h / 2, p.w * 0.52, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    },
+
+    /** スキン進化のオーラ（preview / player 共用） */
+    drawEvoFx(cx, cy, r, stage) {
+      if (stage <= 0) return;
+      ctx.save();
+      if (stage >= 1) {
+        ctx.strokeStyle = `rgba(255,200,80,${0.25 + stage * 0.1})`;
+        ctx.lineWidth = 2 + stage;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + 6 + stage * 3 + Math.sin(this.time * 4) * 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      if (stage >= 2) {
+        const n = 6 + stage * 3;
+        for (let i = 0; i < n; i++) {
+          const a = this.time * 1.5 + (i * Math.PI * 2) / n;
+          const rr = r + 12 + stage * 4;
+          const px = cx + Math.cos(a) * rr;
+          const py = cy + Math.sin(a) * rr;
+          ctx.fillStyle = i % 2 ? "#ffe066" : "#fff";
+          ctx.beginPath();
+          ctx.arc(px, py, 2 + (stage >= 3 ? 1 : 0), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      if (stage >= 3) {
+        const grd = ctx.createRadialGradient(cx, cy, r * 0.5, cx, cy, r + 22);
+        grd.addColorStop(0, "rgba(255,220,100,0.15)");
+        grd.addColorStop(1, "rgba(255,180,60,0)");
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + 22, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    },
+
     /** ショップ中央の大きなキャラ */
     drawPreviewBlob(cx, cy, scale) {
-      const skin = SKINS[this.shopFocus >= 0 ? this.shopFocus : Playables.skin] || SKINS[0];
+      const skinIdx = this.shopFocus >= 0 ? this.shopFocus : Playables.skin;
+      const skin = SKINS[skinIdx] || SKINS[0];
+      const stage = skinStage(skinIdx);
       const bob = Math.sin(this.time * 3) * 6;
+      this.drawEvoFx(cx, cy + bob, 36 * scale, stage);
       ctx.save();
       ctx.translate(cx, cy + bob);
       ctx.scale(scale, scale);
@@ -3339,6 +3455,15 @@
         } else if (!isBest) {
           ctx.fillText(t("best") + ": " + Playables.bestScore, W / 2, H * 0.46);
         }
+        if (Playables.ghost && Playables.ghost.ys) {
+          ctx.fillStyle = "#5a4a5a";
+          ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
+          ctx.fillText(
+            Playables.lang === "en" ? "Ghost ready for next run" : "次のランでゴーストと競走",
+            W / 2,
+            H * 0.485
+          );
+        }
         if (this._rank > 0 && this._rank <= 5) {
           ctx.fillStyle = "#5a4a5a";
           ctx.font = `${Math.min(12, W * 0.028)}px sans-serif`;
@@ -3534,7 +3659,13 @@
       ctx.fillStyle = "#3a2a4a";
       ctx.textAlign = "center";
       ctx.font = `bold ${Math.min(16, W * 0.038)}px sans-serif`;
-      ctx.fillText(Playables.lang === "en" ? fs0.nameEn : fs0.name, W / 2, prevY + 78);
+      const stg = skinStage(focusIdx);
+      const stLab = skinStageLabel(stg);
+      ctx.fillText(
+        (Playables.lang === "en" ? fs0.nameEn : fs0.name) + (stLab ? " " + stLab : ""),
+        W / 2,
+        prevY + 78
+      );
       ctx.font = `${Math.min(12, W * 0.028)}px sans-serif`;
       ctx.fillStyle = "#5a4a5a";
       ctx.fillText(
