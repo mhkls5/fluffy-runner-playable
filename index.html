@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>ふわふわランナー</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #ffe8f0;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      font-family: "Hiragino Maru Gothic ProN", "Yu Gothic", "Segoe UI", sans-serif;
+    }
+    #game {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: auto;
+    }
+    #loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: linear-gradient(180deg, #ffd6e8 0%, #c8f0ff 100%);
+      color: #5a4a6a;
+      font-size: 18px;
+      z-index: 10;
+    }
+    #loading.hidden { display: none; }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #ffc2d8;
+      border-top-color: #ff8fb8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div class="spinner"></div>
+    <div>よみこみ中…</div>
+  </div>
+  <canvas id="game" aria-label="ふわふわランナー ゲーム画面"></canvas>
+
+  <!-- YouTube Playables SDK（ゲームコードより前に読み込む） -->
+  <script src="https://www.gstatic.com/youtube/gs/youtubeplayables.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
