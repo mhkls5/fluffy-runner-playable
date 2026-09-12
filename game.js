@@ -3282,9 +3282,9 @@
       ctx.fillText(t("upgrade"), W / 2, upTop);
 
       const ups = [
-        { key: "jump", label: t("jumpPow"), lv: Playables.upJump },
-        { key: "coin", label: t("coinVal"), lv: Playables.upCoin },
-        { key: "start", label: t("startSpd"), lv: Playables.upStart },
+        { key: "jump", label: t("jumpPow"), eff: t("jumpEff"), lv: Playables.upJump },
+        { key: "coin", label: t("coinVal"), eff: t("coinEff"), lv: Playables.upCoin },
+        { key: "start", label: t("startSpd"), eff: t("startEff"), lv: Playables.upStart },
       ];
       const costs = [30, 80, 160, 300];
       for (let i = 0; i < ups.length; i++) {
@@ -3295,14 +3295,14 @@
         if (ctx.roundRect) ctx.roundRect(pad, y, W - pad * 2, 48, 12);
         else ctx.fillRect(pad, y, W - pad * 2, 48);
         ctx.fill();
-        ctx.fillStyle = "#5a4a6a";
+        ctx.fillStyle = "#3a2a4a";
         ctx.textAlign = "left";
         ctx.font = `bold ${Math.min(14, W * 0.034)}px sans-serif`;
-        ctx.fillText(u.label, pad + 14, y + 22);
-        ctx.font = `${Math.min(12, W * 0.028)}px sans-serif`;
-        ctx.fillStyle = "#7a6a8a";
+        ctx.fillText(u.label, pad + 14, y + 18);
+        ctx.font = `${Math.min(10, W * 0.024)}px sans-serif`;
+        ctx.fillStyle = "#5a4a5a";
         const stars = "★".repeat(u.lv) + "☆".repeat(3 - u.lv);
-        ctx.fillText(stars, pad + 14, y + 40);
+        ctx.fillText(stars + "  " + u.eff, pad + 14, y + 36);
         ctx.textAlign = "center";
         if (u.lv >= 3) {
           ctx.fillStyle = "#7dcea0";
