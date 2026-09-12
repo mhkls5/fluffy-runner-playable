@@ -33,6 +33,10 @@
     yesterdayBest: 0,
     topScores: [], // 最大5件
     badges: {}, // id -> true
+    ownedEquip: { hat: [true, false, false, false], trail: [true, false, false], charm: [true, false, false, false] },
+    equipHat: 0,
+    equipTrail: 0,
+    equipCharm: 0,
     savedLoaded: false,
 
     _lsKey: "fluffy-runner-save-v1",
@@ -59,6 +63,10 @@
         yesterdayBest: this.yesterdayBest,
         topScores: this.topScores,
         badges: this.badges,
+        ownedEquip: this.ownedEquip,
+        equipHat: this.equipHat,
+        equipTrail: this.equipTrail,
+        equipCharm: this.equipCharm,
       };
     },
 
@@ -87,6 +95,19 @@
       if (typeof d.yesterdayBest === "number") this.yesterdayBest = d.yesterdayBest;
       if (Array.isArray(d.topScores)) this.topScores = d.topScores;
       if (d.badges) this.badges = d.badges;
+      if (d.ownedEquip) {
+        this.ownedEquip = {
+          hat: (d.ownedEquip.hat || [true, false, false, false]).slice(),
+          trail: (d.ownedEquip.trail || [true, false, false]).slice(),
+          charm: (d.ownedEquip.charm || [true, false, false, false]).slice(),
+        };
+        this.ownedEquip.hat[0] = true;
+        this.ownedEquip.trail[0] = true;
+        this.ownedEquip.charm[0] = true;
+      }
+      if (typeof d.equipHat === "number") this.equipHat = d.equipHat;
+      if (typeof d.equipTrail === "number") this.equipTrail = d.equipTrail;
+      if (typeof d.equipCharm === "number") this.equipCharm = d.equipCharm;
     },
 
     loadLocal() {
@@ -643,6 +664,58 @@
     return (SKINS[Playables.skin] || SKINS[0]).abil;
   }
 
+  // 装備（見た目＋一部効果）
+  const EQUIP_HAT = [
+    { id: "none", ja: "なし", en: "None", cost: 0, color: null },
+    { id: "ribbon", ja: "リボン", en: "Ribbon", cost: 40, color: "#ff6b8a" },
+    { id: "cap", ja: "ぼうし", en: "Cap", cost: 90, color: "#6bb6ff" },
+    { id: "crown", ja: "王冠", en: "Crown", cost: 200, color: "#ffd56a" },
+  ];
+  const EQUIP_TRAIL = [
+    { id: "none", ja: "なし", en: "None", cost: 0 },
+    { id: "star", ja: "キラキラ", en: "Sparkle", cost: 70, color: "#ffe066" },
+    { id: "heart", ja: "ハート", en: "Hearts", cost: 120, color: "#ff8fb8" },
+  ];
+  const EQUIP_CHARM = [
+    { id: "none", ja: "なし", en: "None", cost: 0, jaEff: "", enEff: "" },
+    {
+      id: "coin",
+      ja: "こばん",
+      en: "Coin Charm",
+      cost: 180,
+      jaEff: "コイン+10%",
+      enEff: "+10% coins",
+      coin: 1.1,
+    },
+    {
+      id: "magnet",
+      ja: "じしゃく",
+      en: "Magnet",
+      cost: 220,
+      jaEff: "開始時マグネット3秒",
+      enEff: "Start magnet 3s",
+      startMagnet: 3,
+    },
+    {
+      id: "lucky",
+      ja: "おまもり",
+      en: "Lucky",
+      cost: 280,
+      jaEff: "フィーバー貯めやすい",
+      enEff: "Easier fever",
+      fever: 1.2,
+    },
+  ];
+
+  function equipAbil() {
+    const c = EQUIP_CHARM[Playables.equipCharm] || EQUIP_CHARM[0];
+    return {
+      coin: c.coin || 1,
+      startMagnet: c.startMagnet || 0,
+      fever: c.fever || 1,
+    };
+  }
+
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
   let W = 0,
@@ -1051,6 +1124,8 @@
       p.invuln = 0;
       p.diving = false;
       this.shield = Math.max(0, skinAbil().startShield || 0);
+      const sm = equipAbil().startMagnet;
+      if (sm > 0) this.magnet = sm;
     },
 
     start() {
@@ -1146,7 +1221,8 @@
 
     collectCoin(c) {
       const ab = skinAbil();
-      const base = (10 + Playables.upCoin * 5) * ab.coin;
+      const eq = equipAbil();
+      const base = (10 + Playables.upCoin * 5) * ab.coin * eq.coin;
       this.coinCount++;
       this.combo++;
       this.comboTimer = 2.2 * ab.comboT;
@@ -1155,7 +1231,7 @@
       bumpMission("maxCombo", this.combo, true);
       // フィーバーチャージ
       if (!this.feverActive) {
-        this.fever = Math.min(1, this.fever + (0.08 + this.combo * 0.01) * ab.fever);
+        this.fever = Math.min(1, this.fever + (0.08 + this.combo * 0.01) * ab.fever * equipAbil().fever);
         if (this.fever >= 1) {
           this.feverActive = true;
           this.fever = 1;
@@ -1241,7 +1317,7 @@
       const rec = recordScore(final);
       this._todayNew = rec.todayNew;
       this._rank = rec.rank;
-      const gained = Math.floor(this.coinCount * (1 + Playables.upCoin * 0.15));
+      const gained = Math.floor(this.coinCount * (1 + Playables.upCoin * 0.15) * equipAbil().coin);
       this._runCoinGain = gained;
       this._doubleUsed = false;
       await Playables.addCoins(gained);
@@ -1329,6 +1405,36 @@
       beep(660, 0.08, "triangle", 0.04);
       setTimeout(() => beep(880, 0.1, "triangle", 0.04), 80);
       setTimeout(() => beep(1175, 0.12, "triangle", 0.035), 160);
+    },
+
+    buyEquip(slot, idx) {
+      const list =
+        slot === "hat" ? EQUIP_HAT : slot === "trail" ? EQUIP_TRAIL : EQUIP_CHARM;
+      const item = list[idx];
+      if (!item) return;
+      const ownedKey = slot === "hat" ? "hat" : slot === "trail" ? "trail" : "charm";
+      if (!Playables.ownedEquip[ownedKey]) Playables.ownedEquip[ownedKey] = [true, false, false, false];
+      Playables.ownedEquip[ownedKey][0] = true;
+      if (!Playables.ownedEquip[ownedKey][idx]) {
+        if (Playables.totalCoins < item.cost) {
+          this.notice = t("needCoins");
+          this.noticeT = 1.2;
+          beep(200, 0.1, "sine", 0.03);
+          return;
+        }
+        Playables.totalCoins -= item.cost;
+        Playables.ownedEquip[ownedKey][idx] = true;
+        this.notice =
+          (Playables.lang === "en" ? item.en : item.ja) +
+          (Playables.lang === "en" ? " unlocked!" : " をかいとった！");
+        this.noticeT = 1.4;
+        beep(660, 0.08, "triangle", 0.04);
+        setTimeout(() => beep(880, 0.1, "triangle", 0.04), 80);
+      }
+      if (slot === "hat") Playables.equipHat = idx;
+      else if (slot === "trail") Playables.equipTrail = idx;
+      else Playables.equipCharm = idx;
+      Playables.persist();
     },
 
     buyUpgrade(kind) {
@@ -1910,6 +2016,23 @@
         if (f.life <= 0) this.floatTexts.splice(i, 1);
       }
 
+      // トレイル演出
+      const trailId = EQUIP_TRAIL[Playables.equipTrail] || EQUIP_TRAIL[0];
+      if (trailId.id === "star" || trailId.id === "heart") {
+        if (Math.random() < 0.55) {
+          this.particles.push({
+            x: p.x + 10,
+            y: p.y + p.h * 0.5,
+            vx: -30 - Math.random() * 40,
+            vy: (Math.random() - 0.5) * 30,
+            life: 0.45,
+            max: 0.45,
+            c: trailId.color || "#ffe066",
+            r: 3 + Math.random() * 3,
+          });
+        }
+      }
+
       if (p.onGround && Math.random() < 0.3) {
         this.particles.push({
           x: p.x + 8,
@@ -2358,6 +2481,137 @@
         ctx.fill();
       }
 
+      // 装備：ぼうし
+      const hat = EQUIP_HAT[Playables.equipHat] || EQUIP_HAT[0];
+      if (hat.id === "ribbon") {
+        ctx.fillStyle = hat.color;
+        ctx.beginPath();
+        ctx.moveTo(cx - 14, cy - p.w * 0.42);
+        ctx.lineTo(cx - 22, cy - p.w * 0.55);
+        ctx.lineTo(cx - 18, cy - p.w * 0.35);
+        ctx.moveTo(cx + 14, cy - p.w * 0.42);
+        ctx.lineTo(cx + 22, cy - p.w * 0.55);
+        ctx.lineTo(cx + 18, cy - p.w * 0.35);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx, cy - p.w * 0.45, 5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (hat.id === "cap") {
+        ctx.fillStyle = hat.color;
+        ctx.beginPath();
+        ctx.arc(cx, cy - p.w * 0.38, p.w * 0.32, Math.PI, 0);
+        ctx.fill();
+        ctx.fillRect(cx - 2, cy - p.w * 0.38, 18, 5);
+      } else if (hat.id === "crown") {
+        ctx.fillStyle = hat.color;
+        ctx.beginPath();
+        ctx.moveTo(cx - 14, cy - p.w * 0.42);
+        ctx.lineTo(cx - 12, cy - p.w * 0.62);
+        ctx.lineTo(cx - 4, cy - p.w * 0.48);
+        ctx.lineTo(cx, cy - p.w * 0.68);
+        ctx.lineTo(cx + 4, cy - p.w * 0.48);
+        ctx.lineTo(cx + 12, cy - p.w * 0.62);
+        ctx.lineTo(cx + 14, cy - p.w * 0.42);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#ff8fb8";
+        ctx.beginPath();
+        ctx.arc(cx, cy - p.w * 0.5, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    },
+
+    /** ショップ中央の大きなキャラ */
+    drawPreviewBlob(cx, cy, scale) {
+      const skin = SKINS[this.shopFocus >= 0 ? this.shopFocus : Playables.skin] || SKINS[0];
+      const bob = Math.sin(this.time * 3) * 6;
+      ctx.save();
+      ctx.translate(cx, cy + bob);
+      ctx.scale(scale, scale);
+      // 影
+      ctx.fillStyle = "rgba(80,60,100,0.12)";
+      ctx.beginPath();
+      ctx.ellipse(0, 36 - bob, 28, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // 体
+      const g = ctx.createRadialGradient(-10, -14, 6, 0, 0, 40);
+      g.addColorStop(0, skin.body[0]);
+      g.addColorStop(0.5, skin.body[1]);
+      g.addColorStop(1, skin.body[2]);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, 36, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = skin.cheek;
+      ctx.beginPath();
+      ctx.ellipse(-16, 10, 7, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(16, 10, 7, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#4a3a5a";
+      ctx.beginPath();
+      ctx.arc(-10, -2, 5, 0, Math.PI * 2);
+      ctx.arc(10, -2, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(-8, -4, 2, 0, Math.PI * 2);
+      ctx.arc(12, -4, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#4a3a5a";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 8, 6, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+      // ぼうし
+      const hat = EQUIP_HAT[Playables.equipHat] || EQUIP_HAT[0];
+      if (hat.id === "ribbon") {
+        ctx.fillStyle = hat.color;
+        ctx.beginPath();
+        ctx.moveTo(-18, -22);
+        ctx.lineTo(-30, -34);
+        ctx.lineTo(-24, -16);
+        ctx.moveTo(18, -22);
+        ctx.lineTo(30, -34);
+        ctx.lineTo(24, -16);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, -26, 7, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (hat.id === "cap") {
+        ctx.fillStyle = hat.color;
+        ctx.beginPath();
+        ctx.arc(0, -22, 24, Math.PI, 0);
+        ctx.fill();
+        ctx.fillRect(-2, -22, 26, 7);
+      } else if (hat.id === "crown") {
+        ctx.fillStyle = hat.color;
+        ctx.beginPath();
+        ctx.moveTo(-20, -24);
+        ctx.lineTo(-17, -46);
+        ctx.lineTo(-6, -30);
+        ctx.lineTo(0, -50);
+        ctx.lineTo(6, -30);
+        ctx.lineTo(17, -46);
+        ctx.lineTo(20, -24);
+        ctx.closePath();
+        ctx.fill();
+      }
+      // チャーム表示
+      const ch = EQUIP_CHARM[Playables.equipCharm] || EQUIP_CHARM[0];
+      if (ch.id !== "none") {
+        ctx.fillStyle = "#ffd56a";
+        ctx.beginPath();
+        ctx.arc(28, 18, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#8a6a20";
+        ctx.font = "bold 10px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("★", 28, 19);
+        ctx.textBaseline = "alphabetic";
+      }
       ctx.restore();
     },
 
@@ -3267,51 +3521,87 @@
         }
       }
 
-      // フォーカス詳細（誤購入防止）
-      ctx.fillStyle = "rgba(70,50,80,0.75)";
-      ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
+      // --- 中央プレビュー ---
+      const focusIdx = this.shopFocus >= 0 ? this.shopFocus : Playables.skin;
+      const fs0 = SKINS[focusIdx] || SKINS[0];
+      const prevY = 230;
+      ctx.fillStyle = "rgba(255,230,240,0.45)";
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(W / 2 - Math.min(W * 0.42, 150), prevY - 70, Math.min(W * 0.84, 300), 140, 20);
+      else ctx.fillRect(W / 2 - 150, prevY - 70, 300, 140);
+      ctx.fill();
+      this.drawPreviewBlob(W / 2, prevY, 1.15);
+      ctx.fillStyle = "#3a2a4a";
       ctx.textAlign = "center";
-      ctx.fillText(t("focusHint"), W / 2, 212);
+      ctx.font = `bold ${Math.min(16, W * 0.038)}px sans-serif`;
+      ctx.fillText(Playables.lang === "en" ? fs0.nameEn : fs0.name, W / 2, prevY + 78);
+      ctx.font = `${Math.min(12, W * 0.028)}px sans-serif`;
+      ctx.fillStyle = "#5a4a5a";
+      ctx.fillText(
+        t("ability") + ": " + (Playables.lang === "en" ? fs0.descEn : fs0.descJa),
+        W / 2,
+        prevY + 96
+      );
 
-      if (this.shopFocus >= 0 && SKINS[this.shopFocus]) {
-        const fs = SKINS[this.shopFocus];
+      // フォーカス操作ボタン
+      if (this.shopFocus >= 0) {
         const fi = this.shopFocus;
+        const sFi = SKINS[fi];
         const ownedF = Playables.owned[fi];
         const equipped = Playables.skin === fi;
-        const dy = 236;
-        ctx.fillStyle = "rgba(255,240,248,0.95)";
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(pad, dy, W - pad * 2, 78, 14);
-        else ctx.fillRect(pad, dy, W - pad * 2, 78);
-        ctx.fill();
-        ctx.strokeStyle = "#ffb7c8";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.fillStyle = "#3a2a4a";
-        ctx.font = `bold ${Math.min(16, W * 0.038)}px sans-serif`;
-        ctx.textAlign = "left";
-        ctx.fillText(Playables.lang === "en" ? fs.nameEn : fs.name, pad + 14, dy + 24);
-        ctx.font = `${Math.min(12, W * 0.03)}px sans-serif`;
-        ctx.fillStyle = "#5a4a5a";
-        ctx.fillText(t("ability") + ": " + (Playables.lang === "en" ? fs.descEn : fs.descJa), pad + 14, dy + 46);
         if (ownedF) {
-          if (!equipped) this.drawButton(W - pad - 50, dy + 39, 88, 36, t("equip"), "#ff8fb8", true);
-          else {
-            ctx.fillStyle = "#3d8a5a";
-            ctx.font = `bold ${Math.min(13, W * 0.03)}px sans-serif`;
-            ctx.textAlign = "right";
-            ctx.fillText(t("wearing"), W - pad - 14, dy + 44);
-          }
+          if (!equipped) this.drawButton(W / 2, prevY + 118, 120, 34, t("equip"), "#ff8fb8", true);
         } else {
-          const can = Playables.totalCoins >= fs.cost;
-          this.drawButton(W - pad - 54, dy + 39, 100, 36, t("buy") + " " + fs.cost + "C", can ? "#ff8fb8" : "#ccc", true);
+          const can = Playables.totalCoins >= sFi.cost;
+          this.drawButton(W / 2, prevY + 118, 160, 34, t("buy") + " " + sFi.cost + "C", can ? "#ff8fb8" : "#ccc", true);
+        }
+      } else {
+        ctx.fillStyle = "rgba(70,50,80,0.65)";
+        ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
+        ctx.fillText(t("focusHint"), W / 2, prevY + 118);
+      }
+
+      // --- 装備 ---
+      const eqY = prevY + 140;
+      ctx.fillStyle = "#3a2a4a";
+      ctx.font = `bold ${Math.min(14, W * 0.034)}px sans-serif`;
+      ctx.fillText(Playables.lang === "en" ? "Equipment" : "そうび", W / 2, eqY);
+
+      const slots = [
+        { key: "hat", label: Playables.lang === "en" ? "Hat" : "ぼうし", list: EQUIP_HAT, idx: Playables.equipHat },
+        { key: "trail", label: Playables.lang === "en" ? "Trail" : "エフェクト", list: EQUIP_TRAIL, idx: Playables.equipTrail },
+        { key: "charm", label: Playables.lang === "en" ? "Charm" : "おまもり", list: EQUIP_CHARM, idx: Playables.equipCharm },
+      ];
+      const chipW = Math.min(100, (W - pad * 2 - 16) / 3);
+      for (let i = 0; i < 3; i++) {
+        const sl = slots[i];
+        const x = pad + i * (chipW + 8) + chipW / 2;
+        const y = eqY + 16;
+        const item = sl.list[sl.idx] || sl.list[0];
+        ctx.fillStyle = "rgba(255,230,240,0.85)";
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x - chipW / 2, y, chipW, 54, 10);
+        else ctx.fillRect(x - chipW / 2, y, chipW, 54);
+        ctx.fill();
+        ctx.fillStyle = "#3a2a4a";
+        ctx.font = `bold ${Math.min(11, chipW * 0.12)}px sans-serif`;
+        ctx.fillText(sl.label, x, y + 16);
+        ctx.font = `${Math.min(12, chipW * 0.13)}px sans-serif`;
+        ctx.fillText(Playables.lang === "en" ? item.en : item.ja, x, y + 34);
+        if (item.jaEff || item.enEff) {
+          ctx.fillStyle = "#7a6a8a";
+          ctx.font = `${Math.min(9, chipW * 0.1)}px sans-serif`;
+          ctx.fillText(Playables.lang === "en" ? item.enEff || "" : item.jaEff || "", x, y + 48);
         }
       }
 
-      const upTop = this.shopFocus >= 0 ? 330 : 250;
+      // 装備選択リスト（小さく横スクロール不要の次候補表示）
+      // タップで次の装備へサイクル（所有済みのみ装備、未所有は購入確認）
+
+      const upTop = eqY + 84;
       // アップグレード
       ctx.fillStyle = "#3a2a4a";
-      ctx.font = `bold ${Math.min(15, W * 0.035)}px sans-serif`;
+      ctx.font = `bold ${Math.min(14, W * 0.032)}px sans-serif`;
       ctx.textAlign = "center";
       ctx.fillText(t("upgrade"), W / 2, upTop);
 
@@ -3323,7 +3613,7 @@
       const costs = [30, 80, 160, 300];
       for (let i = 0; i < ups.length; i++) {
         const u = ups[i];
-        const y = upTop + 30 + i * 56;
+        const y = upTop + 18 + i * 48;
         ctx.fillStyle = "rgba(255,230,240,0.7)";
         ctx.beginPath();
         if (ctx.roundRect) ctx.roundRect(pad, y, W - pad * 2, 48, 12);
@@ -3440,7 +3730,7 @@
     if (Game.state === "shop") {
       const pad = 16;
       const skinW = Math.min(70, (W - pad * 2) / 5);
-      // スキン行 → 選択のみ（購入は下のボタン）
+      // スキン行
       if (pt.y > 120 && pt.y < 200) {
         for (let i = 0; i < SKINS.length; i++) {
           const x = pad + skinW * i + skinW / 2;
@@ -3450,14 +3740,32 @@
           }
         }
       }
-      // 詳細パネルのボタン
+      // 中央の装備/購入ボタン
       if (Game.shopFocus >= 0) {
-        const dy = 236;
-        if (pt.y > dy && pt.y < dy + 78 && pt.x > W - pad - 110) {
+        if (Math.abs(pt.x - W / 2) < 90 && Math.abs(pt.y - 348) < 24) {
           const fi = Game.shopFocus;
           if (Playables.owned[fi]) Game.focusSkin(fi);
           else Game.confirmBuySkin();
           return;
+        }
+      }
+      // 装備チップ（タップで次へ）
+      const eqY = 230 + 140;
+      const slots = [
+        { key: "hat", list: EQUIP_HAT, get: () => Playables.equipHat },
+        { key: "trail", list: EQUIP_TRAIL, get: () => Playables.equipTrail },
+        { key: "charm", list: EQUIP_CHARM, get: () => Playables.equipCharm },
+      ];
+      const chipW = Math.min(100, (W - pad * 2 - 16) / 3);
+      if (pt.y > eqY + 16 && pt.y < eqY + 70) {
+        for (let i = 0; i < 3; i++) {
+          const x = pad + i * (chipW + 8) + chipW / 2;
+          if (Math.abs(pt.x - x) < chipW / 2) {
+            const sl = slots[i];
+            const next = (sl.get() + 1) % sl.list.length;
+            Game.buyEquip(sl.key, next);
+            return;
+          }
         }
       }
       // アップグレード行
@@ -3467,9 +3775,9 @@
         { key: "coin", lv: Playables.upCoin },
         { key: "start", lv: Playables.upStart },
       ];
-      const upTop = Game.shopFocus >= 0 ? 330 : 250;
+      const upTop = eqY + 84;
       for (let i = 0; i < ups.length; i++) {
-        const y = upTop + 30 + i * 56;
+        const y = upTop + 18 + i * 48;
         if (pt.y > y && pt.y < y + 48 && pt.x > W - pad - 100) {
           Game.buyUpgrade(ups[i].key);
           return;
