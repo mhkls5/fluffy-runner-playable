@@ -651,20 +651,35 @@
     schedule() {
       if (!this.started || !soundOn()) return;
       const c = this.ensureCtx();
+      if (c.state === "suspended") {
+        // 自動再生制限が解けるまで待つ（ユーザー操作後に resume）
+        return;
+      }
+      const now = c.currentTime;
+      // タブ復帰などで大きく遅れた場合は巻き戻して詰めない
+      if (!this._next || this._next < now - 0.4) this._next = now + 0.02;
+
+      // 先読みスケジュール（間隔ズレに強い）
+      while (this._next < now + 0.12) {
+        this.scheduleStep(this._next);
+        const fever = this.mode === "fever";
+        const play = this.mode === "play" || fever;
+        const bpm = fever ? 148 : play ? 128 : 96;
+        const stepDur = 60 / bpm / 2;
+        this._next += stepDur;
+      }
+    },
+
+    scheduleStep(t0) {
       const fever = this.mode === "fever";
       const play = this.mode === "play" || fever;
-      // テンポ
       const bpm = fever ? 148 : play ? 128 : 96;
-      const stepDur = 60 / bpm / 2; // 8分音符
-      const now = c.currentTime;
-      const t0 = Math.max(now, this._next || now);
-      this._next = t0 + stepDur;
+      const stepDur = 60 / bpm / 2;
 
       const s = this.step;
       const bar = Math.floor(s / 8) % 4;
       const beat = s % 8;
 
-      // ベース（バー頭）
       if (beat === 0) {
         this.tone(this.bass[bar] * (fever ? 1.0 : 1), stepDur * 3.2, "triangle", fever ? 0.09 : 0.07, t0);
       }
@@ -672,9 +687,7 @@
         this.tone(this.bass[bar] * 1.5, stepDur * 1.5, "triangle", 0.04, t0);
       }
 
-      // メロディ（走り中は多め）
       if (play) {
-        // 簡単なアルペジオ
         const patterns = [
           [0, 2, 4, 5, 4, 2, 4, 7],
           [2, 4, 5, 7, 5, 4, 2, 0],
@@ -682,18 +695,14 @@
           [5, 4, 2, 0, 2, 4, 5, 7],
         ];
         const idx = patterns[bar][beat];
-        const oct = fever ? 1.0 : 0.5;
-        // beat 偶数でメロ、奇数は休符気味
         if (beat % 2 === 0 || fever) {
           const f = this.scale[idx] * (fever ? 1.0 : 0.5);
           this.tone(f, stepDur * 0.85, fever ? "square" : "triangle", fever ? 0.045 : 0.035, t0);
         }
-        // 上乗せ（フィーバー）
         if (fever && beat % 2 === 1) {
           this.tone(this.scale[(idx + 4) % this.scale.length], stepDur * 0.4, "square", 0.02, t0 + stepDur * 0.5);
         }
       } else {
-        // メニューはゆったり
         if (beat === 0 || beat === 4) {
           const notes = [0, 2, 4, 5];
           this.tone(this.scale[notes[bar]], stepDur * 2.8, "sine", 0.03, t0);
@@ -701,11 +710,9 @@
         }
       }
 
-      // ハイハット風
       if (play && (beat === 2 || beat === 6)) {
         this.noise(0.04, fever ? 0.035 : 0.02, t0);
       }
-      // キック風（低音ぽく）
       if (play && (beat === 0 || beat === 4)) {
         this.tone(60, 0.1, "sine", 0.06, t0);
       }
@@ -714,13 +721,24 @@
     },
 
     start() {
-      if (this.started) return;
-      this.started = true;
-      this.ensureCtx();
-      this._next = audioCtx.currentTime;
-      this.timer = setInterval(() => {
-        if (Playables.audioEnabled) this.schedule();
-      }, 40);
+      // ユーザー操作後に必ず呼ばれる想定
+      try {
+        this.ensureCtx();
+        if (audioCtx.state === "suspended") audioCtx.resume();
+      } catch (_) {}
+      if (!this.started) {
+        this.started = true;
+        this.step = 0;
+        this._next = audioCtx ? audioCtx.currentTime + 0.05 : 0;
+        this.timer = setInterval(() => {
+          if (this.started) this.schedule();
+        }, 50);
+      } else {
+        // 既に動いていれば時刻だけ同期（真ん中から再開しない）
+        if (audioCtx && this._next < audioCtx.currentTime - 0.2) {
+          this._next = audioCtx.currentTime + 0.02;
+        }
+      }
     },
 
     stop() {
@@ -733,6 +751,15 @@
 
     setEnabled(on) {
       if (this.master) this.master.gain.value = on && !Playables.mutedLocal ? 0.22 : 0;
+      if (on && !Playables.mutedLocal) {
+        try {
+          this.ensureCtx();
+          if (audioCtx.state === "suspended") audioCtx.resume();
+          if (audioCtx && this._next < audioCtx.currentTime - 0.2) {
+            this._next = audioCtx.currentTime + 0.02;
+          }
+        } catch (_) {}
+      }
     },
 
     toggleMute() {
@@ -3100,7 +3127,11 @@
 
   function pointerDown(e) {
     if (e.cancelable) e.preventDefault();
-    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    // 音（BGM/SFX）は必ずユーザー操作で resume
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+    } catch (_) {}
     Music.start();
     if (Game.state === "menu") Music.setMode("menu");
     const pt = pointFromEvent(e);
@@ -3246,6 +3277,10 @@
     (e) => {
       if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") {
         e.preventDefault();
+        try {
+          if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          if (audioCtx.state === "suspended") audioCtx.resume();
+        } catch (_) {}
         Music.start();
         if (Game.state === "menu") Game.start();
         else if (Game.state === "over") Game.start();
