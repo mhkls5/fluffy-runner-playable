@@ -39,6 +39,8 @@
     bestBonusDate: "",
     bestBonusClaimed: false,
     tutorialSeen: false,
+    tutorialSnoozeUntil: "", // この日付まで自動表示しない
+    tutorialVer: 1,
     ownedEquip: { hat: [true, false, false, false], trail: [true, false, false], charm: [true, false, false, false] },
     equipHat: 0,
     equipTrail: 0,
@@ -79,6 +81,8 @@
         bestBonusDate: this.bestBonusDate,
         bestBonusClaimed: this.bestBonusClaimed,
         tutorialSeen: this.tutorialSeen,
+        tutorialSnoozeUntil: this.tutorialSnoozeUntil,
+        tutorialVer: this.tutorialVer,
         showGhost: this.showGhost,
         ownedEquip: this.ownedEquip,
         equipHat: this.equipHat,
@@ -121,6 +125,8 @@
       if (typeof d.bestBonusDate === "string") this.bestBonusDate = d.bestBonusDate;
       if (typeof d.bestBonusClaimed === "boolean") this.bestBonusClaimed = d.bestBonusClaimed;
       if (typeof d.tutorialSeen === "boolean") this.tutorialSeen = d.tutorialSeen;
+      if (typeof d.tutorialSnoozeUntil === "string") this.tutorialSnoozeUntil = d.tutorialSnoozeUntil;
+      if (typeof d.tutorialVer === "number") this.tutorialVer = d.tutorialVer;
       if (typeof d.showGhost === "boolean") this.showGhost = d.showGhost;
       else this.showGhost = false;
       if (d.ownedEquip) {
@@ -377,6 +383,29 @@
   }
 
   // ---------- 日替わりミッション ----------
+  function datePlusDays(n) {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return (
+      d.getFullYear() +
+      "-" +
+      String(d.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(d.getDate()).padStart(2, "0")
+    );
+  }
+
+  /** ヒット作の定石: 初回だけ自動 → 閉じたら30日スヌーズ → ボタンからは常時 */
+  function shouldAutoTutorial() {
+    const TUT_VER = 1;
+    // 大きく変えたら Ver を上げると再表示できる
+    if ((Playables.tutorialVer || 0) < TUT_VER) return true;
+    if (!Playables.tutorialSeen) return true;
+    const until = Playables.tutorialSnoozeUntil;
+    if (!until) return true;
+    return todayKey() >= until;
+  }
+
   function todayKey() {
     const d = new Date();
     const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -1320,8 +1349,8 @@
       this.baseSpeed = Math.max(280, W * 0.45) * (1 + Playables.upStart * 0.08);
       this.reset();
       this.state = "playing";
-      // 初回のみチュートリアル
-      if (!Playables.tutorialSeen) {
+      // 自動表示は初回 or スヌーズ期限切れのみ（常連は邪魔しない）
+      if (shouldAutoTutorial()) {
         this.showTutorial = true;
         this._forcePause = true;
       }
@@ -1755,6 +1784,7 @@
     },
 
     openTutorial() {
+      // ボタンからはいつでも見られる（スヌーズは解除しない）
       this.showTutorial = true;
       if (this.state === "playing") this._forcePause = true;
     },
@@ -1762,6 +1792,11 @@
     closeTutorial() {
       this.showTutorial = false;
       Playables.tutorialSeen = true;
+      Playables.tutorialVer = 1;
+      // 30日間は自動出さない（ヒット作定石の「うるさくしない」）
+      if (!Playables.tutorialSnoozeUntil || todayKey() >= Playables.tutorialSnoozeUntil) {
+        Playables.tutorialSnoozeUntil = datePlusDays(30);
+      }
       Playables.persist();
       if (this.state === "playing") this._forcePause = false;
     },
@@ -3644,8 +3679,17 @@
       ctx.font = `${Math.min(14, W * 0.034)}px sans-serif`;
       ctx.fillStyle = "#5a4a5a";
       for (let i = 0; i < lines.length; i++) {
-        ctx.fillText(lines[i], W / 2, top + 78 + i * 36);
+        ctx.fillText(lines[i], W / 2, top + 78 + i * 32);
       }
+      ctx.fillStyle = "#8a7a8a";
+      ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
+      ctx.fillText(
+        Playables.lang === "en"
+          ? "Closed = hide for 30 days · Menu anytime"
+          : "閉じると30日間自動表示しません・メニューからいつでも",
+        W / 2,
+        top + ph - 78
+      );
       this.drawButton(W / 2, top + ph - 48, 160, 44, Playables.lang === "en" ? "Got it!" : "わかった！", "#ff8fb8");
     },
 
