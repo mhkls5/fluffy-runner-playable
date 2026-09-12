@@ -38,6 +38,7 @@
     equipTrail: 0,
     equipCharm: 0,
     lifetimeCoins: 0,
+    skinXp: [0, 0, 0, 0, 0], // スキンごとの経験値（装備中コイン等）
     ghost: null, // ベスト走行ゴースト（既定 OFF・保存のみ）
     showGhost: false,
     savedLoaded: false,
@@ -72,6 +73,7 @@
         equipTrail: this.equipTrail,
         equipCharm: this.equipCharm,
         lifetimeCoins: this.lifetimeCoins,
+        skinXp: this.skinXp,
         ghost: this.ghost,
       };
     },
@@ -117,6 +119,7 @@
       if (typeof d.equipTrail === "number") this.equipTrail = d.equipTrail;
       if (typeof d.equipCharm === "number") this.equipCharm = d.equipCharm;
       if (typeof d.lifetimeCoins === "number") this.lifetimeCoins = d.lifetimeCoins;
+      if (Array.isArray(d.skinXp) && d.skinXp.length) this.skinXp = d.skinXp.slice(0, 8);
       if (d.ghost && Array.isArray(d.ghost.samples)) this.ghost = d.ghost;
     },
 
@@ -727,23 +730,58 @@
     };
   }
 
-  /** スキン進化段階 0-3（累計コイン） */
-  function skinStage(skinIdx) {
-    const lc = Playables.lifetimeCoins || 0;
-    // 進化の閾値はスキンの価格帯で少し変える
-    const base = [80, 150, 250, 400, 600];
-    const b = base[skinIdx] || 80;
-    if (lc >= b * 6) return 3;
-    if (lc >= b * 3) return 2;
-    if (lc >= b) return 1;
+  /** スキン個別レベル 0-3（そのスキンで貯めた XP） */
+  const SKIN_XP_NEED = [0, 40, 120, 280]; // Lv1,2,3 のしきい値
+
+  function skinXpOf(i) {
+    if (!Playables.skinXp) Playables.skinXp = [0, 0, 0, 0, 0];
+    return Playables.skinXp[i] || 0;
+  }
+
+  function gainSkinXp(n) {
+    if (!Playables.skinXp) Playables.skinXp = [0, 0, 0, 0, 0];
+    const i = Playables.skin;
+    if (i < 0 || i >= Playables.skinXp.length) return;
+    const before = skinStageFromXp(Playables.skinXp[i]);
+    Playables.skinXp[i] += n;
+    const after = skinStageFromXp(Playables.skinXp[i]);
+    if (after > before) {
+      Game.notice =
+        (Playables.lang === "en" ? "Level up! " : "レベルアップ！ ") +
+        (SKINS[i] ? (Playables.lang === "en" ? SKINS[i].nameEn : SKINS[i].name) : "") +
+        " " +
+        skinStageLabel(after);
+      Game.noticeT = 2;
+      beep(784, 0.08, "triangle", 0.045);
+      setTimeout(() => beep(1046, 0.1, "triangle", 0.04), 90);
+      setTimeout(() => beep(1318, 0.14, "triangle", 0.035), 180);
+      Playables.persist();
+    }
+  }
+
+  function skinStageFromXp(xp) {
+    if (xp >= SKIN_XP_NEED[3]) return 3;
+    if (xp >= SKIN_XP_NEED[2]) return 2;
+    if (xp >= SKIN_XP_NEED[1]) return 1;
     return 0;
+  }
+
+  function skinStage(skinIdx) {
+    return skinStageFromXp(skinXpOf(skinIdx));
   }
 
   function skinStageLabel(stage) {
     if (stage >= 3) return "Ω";
     if (stage === 2) return "★★";
     if (stage === 1) return "★";
-    return "";
+    return "Lv0";
+  }
+
+  function skinStageName(stage) {
+    if (stage >= 3) return Playables.lang === "en" ? "Omega" : "Ω";
+    if (stage === 2) return Playables.lang === "en" ? "Star 2" : "★★";
+    if (stage === 1) return Playables.lang === "en" ? "Star 1" : "★";
+    return Playables.lang === "en" ? "Base" : "通常";
   }
 
   const canvas = document.getElementById("game");
@@ -1263,6 +1301,7 @@
       this.combo++;
       this.comboTimer = 2.2 * ab.comboT;
       this.comboMax = Math.max(this.comboMax, this.combo);
+      gainSkinXp(1);
       bumpMission("coins", 1);
       bumpMission("maxCombo", this.combo, true);
       // フィーバーチャージ
@@ -1354,6 +1393,7 @@
       this._todayNew = rec.todayNew;
       this._rank = rec.rank;
       const gained = Math.floor(this.coinCount * (1 + Playables.upCoin * 0.15) * equipAbil().coin);
+      if (this.coinCount > 0) gainSkinXp(Math.floor(this.coinCount * 0.25));
       this._runCoinGain = gained;
       this._doubleUsed = false;
       await Playables.addCoins(gained);
@@ -2669,13 +2709,30 @@
       ctx.fill();
       // 体
       const g = ctx.createRadialGradient(-10, -14, 6, 0, 0, 40);
-      g.addColorStop(0, skin.body[0]);
-      g.addColorStop(0.5, skin.body[1]);
-      g.addColorStop(1, skin.body[2]);
+      if (stage >= 3) {
+        g.addColorStop(0, "#fff8e0");
+        g.addColorStop(0.45, skin.body[1]);
+        g.addColorStop(1, "#e8a020");
+      } else if (stage >= 2) {
+        g.addColorStop(0, skin.body[0]);
+        g.addColorStop(0.5, skin.body[1]);
+        g.addColorStop(1, skin.body[2]);
+      } else {
+        g.addColorStop(0, skin.body[0]);
+        g.addColorStop(0.5, skin.body[1]);
+        g.addColorStop(1, skin.body[2]);
+      }
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(0, 0, 36, 0, Math.PI * 2);
       ctx.fill();
+      if (stage >= 1) {
+        ctx.strokeStyle = stage >= 3 ? "rgba(255,200,60,0.85)" : "rgba(255,255,255,0.55)";
+        ctx.lineWidth = 2 + stage;
+        ctx.beginPath();
+        ctx.arc(0, 0, 36, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.fillStyle = skin.cheek;
       ctx.beginPath();
       ctx.ellipse(-16, 10, 7, 4, 0, 0, Math.PI * 2);
@@ -2691,11 +2748,33 @@
       ctx.arc(-8, -4, 2, 0, Math.PI * 2);
       ctx.arc(12, -4, 2, 0, Math.PI * 2);
       ctx.fill();
+      if (stage >= 2) {
+        // キラ目
+        ctx.fillStyle = "#ffe066";
+        ctx.beginPath();
+        ctx.arc(-8, -4, 1.2, 0, Math.PI * 2);
+        ctx.arc(12, -4, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.strokeStyle = "#4a3a5a";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(0, 8, 6, 0.2, Math.PI - 0.2);
+      ctx.arc(0, 8, 6 + (stage >= 2 ? 1 : 0), 0.2, Math.PI - 0.2);
       ctx.stroke();
+      if (stage >= 3) {
+        // Ω 用のミニ王冠
+        ctx.fillStyle = "#ffd56a";
+        ctx.beginPath();
+        ctx.moveTo(-12, -30);
+        ctx.lineTo(-10, -44);
+        ctx.lineTo(-3, -34);
+        ctx.lineTo(0, -48);
+        ctx.lineTo(3, -34);
+        ctx.lineTo(10, -44);
+        ctx.lineTo(12, -30);
+        ctx.closePath();
+        ctx.fill();
+      }
       // ぼうし
       const hat = EQUIP_HAT[Playables.equipHat] || EQUIP_HAT[0];
       if (hat.id === "ribbon") {
@@ -3689,6 +3768,27 @@
         W / 2,
         prevY + 96
       );
+      // XP バー
+      const xp = skinXpOf(focusIdx);
+      const stNow = skinStage(focusIdx);
+      const need =
+        stNow >= 3 ? SKIN_XP_NEED[3] : SKIN_XP_NEED[Math.min(3, stNow + 1)];
+      const prevNeed = SKIN_XP_NEED[stNow] || 0;
+      const ratio = stNow >= 3 ? 1 : Math.min(1, (xp - prevNeed) / Math.max(1, need - prevNeed));
+      const barW = Math.min(W * 0.5, 160);
+      ctx.fillStyle = "rgba(0,0,0,0.1)";
+      ctx.fillRect(W / 2 - barW / 2, prevY + 104, barW, 6);
+      ctx.fillStyle = stNow >= 3 ? "#e8a020" : "#ff8fb8";
+      ctx.fillRect(W / 2 - barW / 2, prevY + 104, barW * ratio, 6);
+      ctx.fillStyle = "#7a6a8a";
+      ctx.font = `${Math.min(10, W * 0.024)}px sans-serif`;
+      ctx.fillText(
+        stNow >= 3
+          ? "MAX " + skinStageLabel(stNow)
+          : skinStageLabel(stNow) + " → " + skinStageLabel(stNow + 1) + "  " + xp + "/" + need,
+        W / 2,
+        prevY + 124
+      );
 
       // フォーカス操作ボタン
       if (this.shopFocus >= 0) {
@@ -3697,15 +3797,15 @@
         const ownedF = Playables.owned[fi];
         const equipped = Playables.skin === fi;
         if (ownedF) {
-          if (!equipped) this.drawButton(W / 2, prevY + 118, 120, 34, t("equip"), "#ff8fb8", true);
+          if (!equipped) this.drawButton(W / 2, prevY + 142, 120, 34, t("equip"), "#ff8fb8", true);
         } else {
           const can = Playables.totalCoins >= sFi.cost;
-          this.drawButton(W / 2, prevY + 118, 160, 34, t("buy") + " " + sFi.cost + "C", can ? "#ff8fb8" : "#ccc", true);
+          this.drawButton(W / 2, prevY + 142, 160, 34, t("buy") + " " + sFi.cost + "C", can ? "#ff8fb8" : "#ccc", true);
         }
       } else {
         ctx.fillStyle = "rgba(70,50,80,0.65)";
         ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
-        ctx.fillText(t("focusHint"), W / 2, prevY + 118);
+        ctx.fillText(t("focusHint"), W / 2, prevY + 142);
       }
 
       // --- 装備 ---
@@ -3910,7 +4010,7 @@
       }
       // 中央の装備/購入ボタン
       if (Game.shopFocus >= 0) {
-        if (Math.abs(pt.x - W / 2) < 90 && Math.abs(pt.y - 348) < 24) {
+        if (Math.abs(pt.x - W / 2) < 90 && Math.abs(pt.y - 372) < 24) {
           const fi = Game.shopFocus;
           if (Playables.owned[fi]) Game.focusSkin(fi);
           else Game.confirmBuySkin();
