@@ -1184,6 +1184,8 @@
       this._rank = 0;
       this._riskActive = 0;
       this._sawUncle = false;
+      this._uncleGuaranteed = false;
+      this._caughtUncle = 0;
       this._ghostRec = [];
       this._ghostAcc = 0;
       this._runTime = 0;
@@ -1604,16 +1606,18 @@
       }
       const fromLeft = Math.random() < 0.5;
       const scale = type === "ojisan" ? 1.15 : 0.85 + Math.random() * 0.25;
-      // おじさんは追跡用に遅め（プレイヤーより僅かに遅いくらい）
-      const baseVx =
+      // おじさんは必ず「画面奥（右）」から左へ。後ろからは出さない
+      // （プレイヤーは画面左固定のため、後ろからは追いつけない）
+      const spawnX = type === "ojisan" ? W + 60 : fromLeft ? -80 : W + 80;
+      const spawnVx =
         type === "ojisan"
-          ? this.speed * 0.38 + 20
-          : this.speed * 0.55 + 40 + Math.random() * 50;
+          ? -(this.speed * 0.48 + 30)
+          : (fromLeft ? 1 : -1) * (this.speed * 0.55 + 40 + Math.random() * 50);
       this.cameos.push({
         type,
-        x: fromLeft ? -80 : W + 80,
+        x: spawnX,
         y: this.groundY - 8,
-        vx: (fromLeft ? 1 : -1) * baseVx,
+        vx: spawnVx,
         scale,
         bob: Math.random() * 6,
         bobSpeed: 6 + Math.random() * 4,
@@ -2078,16 +2082,23 @@
 
       // ゲスト
       this.cameoTimer -= dt;
+      // スコア 150 以降で 1 回だけおじさんを保証（追跡を気づきやすく）
+      if (!this._uncleGuaranteed && this.score > 150 && this.state === "playing") {
+        this._uncleGuaranteed = true;
+        this.spawnCameo("ojisan");
+        this.cameoTimer = 8;
+      }
       if (this.cameoTimer <= 0 && this.cameos.length < 2) {
         this.spawnCameo();
         this.cameoTimer = 6 + Math.random() * 8;
       }
       for (let i = this.cameos.length - 1; i >= 0; i--) {
         const g = this.cameos[i];
-        // おじさんは追跡しやすいよう一定の遅い速度を保つ
+        // おじさんは左へ進む（プレイヤーに近づく）。掴めないと徐々に加速して逃げる
         if (g.chaseable && !g.caught) {
-          const dir = g.vx >= 0 ? 1 : -1;
-          g.vx = dir * Math.max(120, this.speed * 0.42);
+          g.escapeT = (g.escapeT || 0) + gdt;
+          const boost = g.escapeT > 3.5 ? 1.35 : 1;
+          g.vx = -(this.speed * 0.48 + 30) * boost;
         }
         g.x += g.vx * gdt;
         g.bob += dt * g.bobSpeed;
