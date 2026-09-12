@@ -35,8 +35,80 @@
     badges: {}, // id -> true
     savedLoaded: false,
 
+    _lsKey: "fluffy-runner-save-v1",
+
+    snapshot() {
+      return {
+        bestScore: this.bestScore,
+        totalCoins: this.totalCoins,
+        runs: this.runs,
+        skin: this.skin,
+        upJump: this.upJump,
+        upCoin: this.upCoin,
+        upStart: this.upStart,
+        owned: this.owned,
+        missionDate: this.missionDate,
+        missionProgress: this.missionProgress,
+        missionClaimed: this.missionClaimed,
+        lang: this.lang,
+        mutedLocal: this.mutedLocal,
+        loginDate: this.loginDate,
+        loginStreak: this.loginStreak,
+        todayBestDate: this.todayBestDate,
+        todayBest: this.todayBest,
+        yesterdayBest: this.yesterdayBest,
+        topScores: this.topScores,
+        badges: this.badges,
+      };
+    },
+
+    applySave(d) {
+      if (!d) return;
+      if (typeof d.bestScore === "number") this.bestScore = d.bestScore;
+      if (typeof d.totalCoins === "number") this.totalCoins = d.totalCoins;
+      if (typeof d.runs === "number") this.runs = d.runs;
+      if (typeof d.skin === "number") this.skin = d.skin;
+      if (typeof d.upJump === "number") this.upJump = d.upJump;
+      if (typeof d.upCoin === "number") this.upCoin = d.upCoin;
+      if (typeof d.upStart === "number") this.upStart = d.upStart;
+      if (Array.isArray(d.owned) && d.owned.length) this.owned = d.owned;
+      if (typeof d.missionDate === "string") this.missionDate = d.missionDate;
+      if (d.missionProgress) this.missionProgress = Object.assign(this.missionProgress, d.missionProgress);
+      if (Array.isArray(d.missionClaimed)) this.missionClaimed = d.missionClaimed;
+      if (d.lang === "ja" || d.lang === "en") {
+        this.lang = d.lang;
+        this._langSaved = true;
+      }
+      if (typeof d.mutedLocal === "boolean") this.mutedLocal = d.mutedLocal;
+      if (typeof d.loginDate === "string") this.loginDate = d.loginDate;
+      if (typeof d.loginStreak === "number") this.loginStreak = d.loginStreak;
+      if (typeof d.todayBestDate === "string") this.todayBestDate = d.todayBestDate;
+      if (typeof d.todayBest === "number") this.todayBest = d.todayBest;
+      if (typeof d.yesterdayBest === "number") this.yesterdayBest = d.yesterdayBest;
+      if (Array.isArray(d.topScores)) this.topScores = d.topScores;
+      if (d.badges) this.badges = d.badges;
+    },
+
+    loadLocal() {
+      try {
+        const raw = localStorage.getItem(this._lsKey);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (_) {
+        return null;
+      }
+    },
+
+    saveLocal(data) {
+      try {
+        localStorage.setItem(this._lsKey, JSON.stringify(data));
+      } catch (_) {}
+    },
+
     async init() {
       const api = window.YoutubePlayables;
+      // まずローカル（GitHub Pages 等の SDK なし環境用）
+      this.applySave(this.loadLocal());
       if (!api) {
         this.ready = true;
         this.savedLoaded = true;
@@ -63,31 +135,8 @@
         Game.setAudioEnabled(this.audioEnabled);
         try {
           const d = await api.loadData();
-          if (d) {
-            if (typeof d.bestScore === "number") this.bestScore = d.bestScore;
-            if (typeof d.totalCoins === "number") this.totalCoins = d.totalCoins;
-            if (typeof d.runs === "number") this.runs = d.runs;
-            if (typeof d.skin === "number") this.skin = d.skin;
-            if (typeof d.upJump === "number") this.upJump = d.upJump;
-            if (typeof d.upCoin === "number") this.upCoin = d.upCoin;
-            if (typeof d.upStart === "number") this.upStart = d.upStart;
-            if (Array.isArray(d.owned) && d.owned.length) this.owned = d.owned;
-            if (typeof d.missionDate === "string") this.missionDate = d.missionDate;
-            if (d.missionProgress) this.missionProgress = Object.assign(this.missionProgress, d.missionProgress);
-            if (Array.isArray(d.missionClaimed)) this.missionClaimed = d.missionClaimed;
-            if (d.lang === "ja" || d.lang === "en") {
-              this.lang = d.lang;
-              this._langSaved = true;
-            }
-            if (typeof d.mutedLocal === "boolean") this.mutedLocal = d.mutedLocal;
-            if (typeof d.loginDate === "string") this.loginDate = d.loginDate;
-            if (typeof d.loginStreak === "number") this.loginStreak = d.loginStreak;
-            if (typeof d.todayBestDate === "string") this.todayBestDate = d.todayBestDate;
-            if (typeof d.todayBest === "number") this.todayBest = d.todayBest;
-            if (typeof d.yesterdayBest === "number") this.yesterdayBest = d.yesterdayBest;
-            if (Array.isArray(d.topScores)) this.topScores = d.topScores;
-            if (d.badges) this.badges = d.badges;
-          }
+          // YouTube クラウドがあればそちらを正とする
+          if (d) this.applySave(d);
         } catch (_) {}
         this.savedLoaded = true;
         this.ready = true;
@@ -99,31 +148,16 @@
     },
 
     async persist() {
+      const data = this.snapshot();
+      // SDK なし環境（GitHub Pages 等）では localStorage に保存
       const api = window.YoutubePlayables;
-      if (!api || typeof api.saveData !== "function") return;
+      if (!api || typeof api.saveData !== "function") {
+        this.saveLocal(data);
+        return;
+      }
+      // Playables 本番はクラウドセーブのみ（認定要件）
       try {
-        await api.saveData({
-          bestScore: this.bestScore,
-          totalCoins: this.totalCoins,
-          runs: this.runs,
-          skin: this.skin,
-          upJump: this.upJump,
-          upCoin: this.upCoin,
-          upStart: this.upStart,
-          owned: this.owned,
-          missionDate: this.missionDate,
-          missionProgress: this.missionProgress,
-          missionClaimed: this.missionClaimed,
-          lang: this.lang,
-          mutedLocal: this.mutedLocal,
-          loginDate: this.loginDate,
-          loginStreak: this.loginStreak,
-          todayBestDate: this.todayBestDate,
-          todayBest: this.todayBest,
-          yesterdayBest: this.yesterdayBest,
-          topScores: this.topScores,
-          badges: this.badges,
-        });
+        await api.saveData(data);
       } catch (_) {}
     },
 
