@@ -3572,18 +3572,24 @@
         ensureDailyMissions();
         syncTodayBest();
         const panelW = Math.min(W * 0.92, 380);
-        this.drawPanel(W / 2, H * 0.28, panelW, 170);
+        const panelH = 200;
+        const panelCy = Math.max(130, H * 0.26);
+        const panelTop = panelCy - panelH / 2;
+        this.drawPanel(W / 2, panelCy, panelW, panelH);
         ctx.fillStyle = "#3a2a4a";
         ctx.textAlign = "center";
-        ctx.font = `bold ${Math.min(28, W * 0.06)}px sans-serif`;
-        ctx.fillText(t("title"), W / 2, H * 0.2);
-        ctx.font = `${Math.min(13, W * 0.032)}px sans-serif`;
+        const titleSize = Math.min(26, W * 0.055);
+        ctx.font = `bold ${titleSize}px sans-serif`;
+        // 枠に食い込まないよう、パネル内上から 36px 下に置く
+        ctx.fillText(t("title"), W / 2, panelTop + 40);
+        ctx.font = `${Math.min(12, W * 0.03)}px sans-serif`;
         ctx.fillStyle = "#4a3a5a";
-        ctx.fillText(t("tagline"), W / 2, H * 0.25);
-        ctx.fillText(t("how"), W / 2, H * 0.25 + 20);
+        ctx.fillText(t("tagline"), W / 2, panelTop + 68);
+        ctx.fillText(t("how"), W / 2, panelTop + 88);
 
-        this.drawButton(W / 2 - 70, H * 0.36, 120, 46, t("play"), "#ff8fb8");
-        this.drawButton(W / 2 + 70, H * 0.36, 120, 46, t("shop"), "#7ec8e8");
+        const btnY = panelTop + 120;
+        this.drawButton(W / 2 - 70, btnY, 120, 46, t("play"), "#ff8fb8");
+        this.drawButton(W / 2 + 70, btnY, 120, 46, t("shop"), "#7ec8e8");
 
         // 今日のチャレンジ
         const tb = Playables.todayBest || 0;
@@ -3597,7 +3603,7 @@
               ? "Today: " + tb + " · Beat yesterday " + yb + "!"
               : "今日 " + tb + " / 昨日 " + yb + " を越えよう！",
             W / 2,
-            H * 0.42
+            panelTop + 158
           );
         } else {
           ctx.fillText(
@@ -3605,7 +3611,7 @@
               ? "Today best " + tb + " · All-time " + Playables.bestScore
               : "今日のベスト " + tb + "　通算 " + Playables.bestScore,
             W / 2,
-            H * 0.42
+            panelTop + 158
           );
         }
         ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
@@ -3617,7 +3623,7 @@
             ? "Badges " + badgeN + "/" + BADGES.length + " · Uncle streak " + ust + " · Runs " + Playables.runs
             : "実績 " + badgeN + "/" + BADGES.length + "　おじ連続 " + ust + "　プレイ " + Playables.runs,
           W / 2,
-          H * 0.445
+          panelTop + 178
         );
 
         this.drawMissionPanel();
@@ -4230,12 +4236,15 @@
     }
 
     if (Game.state === "menu") {
-      // あそぶ / ショップ
-      if (Math.abs(pt.x - (W / 2 - 70)) < 70 && Math.abs(pt.y - H * 0.36) < 36) {
+      // あそぶ / ショップ（パネル内ボタン位置に合わせる）
+      const panelH = 200;
+      const panelCy = Math.max(130, H * 0.26);
+      const btnY = panelCy - panelH / 2 + 120;
+      if (Math.abs(pt.x - (W / 2 - 70)) < 70 && Math.abs(pt.y - btnY) < 36) {
         Game.start();
         return;
       }
-      if (Math.abs(pt.x - (W / 2 + 70)) < 70 && Math.abs(pt.y - H * 0.36) < 36) {
+      if (Math.abs(pt.x - (W / 2 + 70)) < 70 && Math.abs(pt.y - btnY) < 36) {
         Game.state = "shop";
         Music.setMode("menu");
         return;
