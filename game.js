@@ -28,6 +28,11 @@
     loginStreak: 0,
     loginDay: 0, // 1-7 今日の連続日数（未受取なら0）
     loginPending: false, // 今日のログインボーナス未受取
+    todayBestDate: "",
+    todayBest: 0,
+    yesterdayBest: 0,
+    topScores: [], // 最大5件
+    badges: {}, // id -> true
     savedLoaded: false,
 
     async init() {
@@ -77,6 +82,11 @@
             if (typeof d.mutedLocal === "boolean") this.mutedLocal = d.mutedLocal;
             if (typeof d.loginDate === "string") this.loginDate = d.loginDate;
             if (typeof d.loginStreak === "number") this.loginStreak = d.loginStreak;
+            if (typeof d.todayBestDate === "string") this.todayBestDate = d.todayBestDate;
+            if (typeof d.todayBest === "number") this.todayBest = d.todayBest;
+            if (typeof d.yesterdayBest === "number") this.yesterdayBest = d.yesterdayBest;
+            if (Array.isArray(d.topScores)) this.topScores = d.topScores;
+            if (d.badges) this.badges = d.badges;
           }
         } catch (_) {}
         this.savedLoaded = true;
@@ -108,6 +118,11 @@
           mutedLocal: this.mutedLocal,
           loginDate: this.loginDate,
           loginStreak: this.loginStreak,
+          todayBestDate: this.todayBestDate,
+          todayBest: this.todayBest,
+          yesterdayBest: this.yesterdayBest,
+          topScores: this.topScores,
+          badges: this.badges,
         });
       } catch (_) {}
     },
@@ -461,6 +476,68 @@
       setTimeout(() => beep(1175, 0.16, "triangle", 0.04), 180);
     }
     return reward;
+  }
+
+  // ---------- 今日のベスト / TOP5 / 実績 ----------
+  function syncTodayBest() {
+    const key = todayKey();
+    if (Playables.todayBestDate !== key) {
+      // 日付が変わったら昨日ベストへ移す
+      if (Playables.todayBestDate) {
+        Playables.yesterdayBest = Playables.todayBest || 0;
+      }
+      Playables.todayBestDate = key;
+      Playables.todayBest = 0;
+      Playables.persist();
+    }
+  }
+
+  function recordScore(score) {
+    syncTodayBest();
+    const s = Math.floor(score);
+    let todayNew = false;
+    if (s > (Playables.todayBest || 0)) {
+      Playables.todayBest = s;
+      todayNew = true;
+    }
+    // TOP5
+    const list = (Playables.topScores || []).slice();
+    list.push(s);
+    list.sort((a, b) => b - a);
+    Playables.topScores = list.slice(0, 5);
+    Playables.persist();
+    return { todayNew, rank: Playables.topScores.indexOf(s) + 1 };
+  }
+
+  const BADGES = [
+    { id: "first", ja: "はじめの一歩", en: "First Run", descJa: "1回プレイ", descEn: "Play once", check: (G) => Playables.runs >= 1 },
+    { id: "score500", ja: "500点", en: "500 pts", descJa: "500点とる", descEn: "Score 500", check: () => Playables.bestScore >= 500 },
+    { id: "score1500", ja: "1500点", en: "1500 pts", descJa: "1500点とる", descEn: "Score 1500", check: () => Playables.bestScore >= 1500 },
+    { id: "combo15", ja: "コンボ15", en: "Combo 15", descJa: "コンボ15", descEn: "Combo x15", check: (G) => G.comboMax >= 15 },
+    { id: "coins100", ja: "コイン100", en: "100 Coins", descJa: "コイン累計100", descEn: "100 coins total", check: () => Playables.totalCoins >= 100 },
+    { id: "coins500", ja: "コイン500", en: "500 Coins", descJa: "コイン累計500", descEn: "500 coins total", check: () => Playables.totalCoins >= 500 },
+    { id: "login3", ja: "3日連続", en: "3-Day Streak", descJa: "3日連続ログイン", descEn: "Login 3 days", check: () => Playables.loginStreak >= 3 },
+    { id: "skinBuy", ja: "コレクター", en: "Collector", descJa: "スキンを1つ買う", descEn: "Buy a skin", check: () => Playables.owned.some((o, i) => i > 0 && o) },
+    { id: "near10", ja: "ニアミス10", en: "10 Near-miss", descJa: "1ランでニアミス10", descEn: "10 near-misses in a run", check: (G) => G.nearMisses >= 10 },
+    { id: "uncle", ja: "おじさんと友達", en: "Uncle Friend", descJa: "おじさんボーナス", descEn: "Uncle bonus", check: (G) => G._sawUncle },
+  ];
+
+  function checkBadges(G) {
+    if (!Playables.badges) Playables.badges = {};
+    for (const b of BADGES) {
+      if (Playables.badges[b.id]) continue;
+      try {
+        if (b.check(G)) {
+          Playables.badges[b.id] = true;
+          Playables.persist();
+          Game.notice = (Playables.lang === "en" ? "Badge: " : "実績GET！ ") + (Playables.lang === "en" ? b.en : b.ja);
+          Game.noticeT = 2.2;
+          beep(880, 0.08, "triangle", 0.045);
+          setTimeout(() => beep(1175, 0.12, "triangle", 0.04), 90);
+          Playables.totalCoins += 25;
+        }
+      } catch (_) {}
+    }
   }
 
   // スキン定義
@@ -921,6 +998,10 @@
       this.birdTimer = 5 + Math.random() * 4;
       this._runCoinGain = 0;
       this._doubleUsed = false;
+      this._todayNew = false;
+      this._rank = 0;
+      this._riskActive = 0;
+      this._sawUncle = false;
       const p = this.player;
       p.y = this.groundY - p.h;
       p.vy = 0;
@@ -1117,6 +1198,9 @@
 
       const final = Math.floor(this.score);
       bumpMission("bestRunScore", final, true);
+      const rec = recordScore(final);
+      this._todayNew = rec.todayNew;
+      this._rank = rec.rank;
       const gained = Math.floor(this.coinCount * (1 + Playables.upCoin * 0.15));
       this._runCoinGain = gained;
       this._doubleUsed = false;
@@ -1125,6 +1209,7 @@
         Playables.bestScore = final;
         await Playables.persist();
       }
+      checkBadges(this);
       this._overCount++;
       if (this._overCount % 3 === 0) {
         await Playables.showInterstitial();
@@ -1305,6 +1390,7 @@
       });
       if (type === "ojisan") {
         // ★イベント化：おじさんボーナス
+        this._sawUncle = true;
         this.notice = t("ojisanBonus");
         this.noticeT = 2.4;
         this.magnet = Math.max(this.magnet, 6);
@@ -1427,6 +1513,7 @@
       }
       if (this.magnet > 0) this.magnet -= dt;
       if (this.doublePts > 0) this.doublePts -= dt;
+      checkBadges(this);
 
       // 物理
       const gravity = Math.min(2200, H * 3.2);
@@ -1485,6 +1572,36 @@
       }
       p.squash = Math.max(0, p.squash - dt * 4);
       p.blink += dt;
+
+      // ハイリスク帯（スコア 200 以降に稀に出現）
+      if (this.score > 200 && !this._riskActive && Math.random() < dt * 0.08) {
+        this._riskActive = 2.5;
+        this.notice = Playables.lang === "en" ? "RISK ZONE! High coins" : "ハイリスク帯！ コインが多い";
+        this.noticeT = 1.6;
+        beep(330, 0.1, "sawtooth", 0.04);
+        for (let i = 0; i < 10; i++) {
+          this.coins.push({
+            x: W + 40 + i * 30,
+            y: this.groundY - 50 - (i % 3) * 36,
+            r: 13,
+            spin: Math.random() * 6,
+            got: false,
+          });
+        }
+        // 障害物も多め
+        for (let i = 0; i < 2; i++) {
+          this.obstacles.push({
+            kind: i === 0 ? "rock" : "bush",
+            x: W + 80 + i * 120,
+            y: this.groundY - (i === 0 ? 42 : 36),
+            w: i === 0 ? 34 : 40,
+            h: i === 0 ? 42 : 36,
+            passed: false,
+            nearDone: false,
+          });
+        }
+      }
+      if (this._riskActive > 0) this._riskActive -= dt;
 
       // 障害物
       this.spawnTimer -= dt;
@@ -2732,6 +2849,7 @@
 
       if (this.state === "menu") {
         ensureDailyMissions();
+        syncTodayBest();
         const panelW = Math.min(W * 0.92, 380);
         this.drawPanel(W / 2, H * 0.28, panelW, 170);
         ctx.fillStyle = "#3a2a4a";
@@ -2746,15 +2864,42 @@
         this.drawButton(W / 2 - 70, H * 0.36, 120, 46, t("play"), "#ff8fb8");
         this.drawButton(W / 2 + 70, H * 0.36, 120, 46, t("shop"), "#7ec8e8");
 
+        // 今日のチャレンジ
+        const tb = Playables.todayBest || 0;
+        const yb = Playables.yesterdayBest || 0;
         ctx.fillStyle = "#4a3a5a";
-        ctx.font = `${Math.min(13, W * 0.03)}px sans-serif`;
+        ctx.font = `bold ${Math.min(13, W * 0.03)}px sans-serif`;
+        if (yb > 0 && tb < yb) {
+          ctx.fillStyle = "#c07000";
+          ctx.fillText(
+            Playables.lang === "en"
+              ? "Today: " + tb + " · Beat yesterday " + yb + "!"
+              : "今日 " + tb + " / 昨日 " + yb + " を越えよう！",
+            W / 2,
+            H * 0.42
+          );
+        } else {
+          ctx.fillText(
+            Playables.lang === "en"
+              ? "Today best " + tb + " · All-time " + Playables.bestScore
+              : "今日のベスト " + tb + "　通算 " + Playables.bestScore,
+            W / 2,
+            H * 0.42
+          );
+        }
+        ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
+        ctx.fillStyle = "#7a6a8a";
+        const badgeN = Object.keys(Playables.badges || {}).length;
         ctx.fillText(
-          t("best") + " " + Playables.bestScore + "　" + t("plays") + " " + Playables.runs,
+          Playables.lang === "en"
+            ? "Badges " + badgeN + "/" + BADGES.length + " · Runs " + Playables.runs
+            : "実績 " + badgeN + "/" + BADGES.length + "　プレイ " + Playables.runs + " 回",
           W / 2,
-          H * 0.42
+          H * 0.445
         );
 
         this.drawMissionPanel();
+        this.drawTopScores();
       }
 
       if (this.state === "shop") {
@@ -2844,6 +2989,14 @@
           ctx.globalAlpha = 1;
         }
 
+        // ハイリスク帯の縁
+        if (this._riskActive > 0) {
+          const a = 0.25 + Math.sin(this.time * 10) * 0.1;
+          ctx.strokeStyle = `rgba(255,80,80,${a})`;
+          ctx.lineWidth = 6;
+          ctx.strokeRect(3, 3, W - 6, H - 6);
+        }
+
         if (this._forcePause) {
           ctx.fillStyle = "rgba(60,40,80,0.45)";
           ctx.fillRect(0, 0, W, H);
@@ -2882,8 +3035,24 @@
         if (almost) {
           ctx.fillStyle = "#c07000";
           ctx.fillText(t("almost"), W / 2, H * 0.46);
+        } else if (this._todayNew) {
+          ctx.fillStyle = "#c07000";
+          ctx.fillText(
+            Playables.lang === "en" ? "New today's best!" : "今日のベスト更新！",
+            W / 2,
+            H * 0.46
+          );
         } else if (!isBest) {
           ctx.fillText(t("best") + ": " + Playables.bestScore, W / 2, H * 0.46);
+        }
+        if (this._rank > 0 && this._rank <= 5) {
+          ctx.fillStyle = "#5a4a5a";
+          ctx.font = `${Math.min(12, W * 0.028)}px sans-serif`;
+          ctx.fillText(
+            Playables.lang === "en" ? "Rank #" + this._rank : "ランキング " + this._rank + " 位",
+            W / 2,
+            H * 0.5
+          );
         }
 
         this.drawButton(W / 2 - 72, H * 0.56, 128, 48, t("again"), "#ff8fb8");
@@ -2902,6 +3071,32 @@
         ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
         ctx.fillText(t("continueHint"), W / 2, H * 0.72);
         this.drawButton(W / 2, H * 0.77, 140, 38, t("shopGo"), "#b8a9d4", true);
+      }
+    },
+
+    drawTopScores() {
+      const scores = Playables.topScores || [];
+      if (!scores.length) return;
+      const pad = Math.min(16, W * 0.04);
+      const top = Math.min(H * 0.82, H - 110);
+      const w = Math.min(W * 0.92, 360);
+      const h = 28 + scores.length * 20;
+      ctx.fillStyle = "rgba(255,255,255,0.82)";
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(W / 2 - w / 2, top, w, h, 12);
+      else ctx.fillRect(W / 2 - w / 2, top, w, h);
+      ctx.fill();
+      ctx.fillStyle = "#5a4a5a";
+      ctx.textAlign = "left";
+      ctx.font = `bold ${Math.min(12, W * 0.028)}px sans-serif`;
+      ctx.fillText(Playables.lang === "en" ? "TOP SCORES" : "ランキング", W / 2 - w / 2 + 12, top + 18);
+      ctx.textAlign = "right";
+      ctx.font = `${Math.min(12, W * 0.028)}px sans-serif`;
+      for (let i = 0; i < scores.length; i++) {
+        const y = top + 36 + i * 18;
+        ctx.textAlign = "left";
+        ctx.fillStyle = i === 0 ? "#c07000" : "#5a4a5a";
+        ctx.fillText((i + 1) + ".  " + scores[i], W / 2 - w / 2 + 16, y);
       }
     },
 
@@ -3330,6 +3525,7 @@
     } catch (_) {}
     ensureDailyMissions();
     checkLoginBonus();
+    syncTodayBest();
     if (Playables.loginPending) Game.showLogin = true;
     Game.draw();
     await Playables.init();
