@@ -590,7 +590,7 @@
       if (audioCtx.state === "suspended") audioCtx.resume();
       if (!this.master) {
         this.master = audioCtx.createGain();
-        this.master.gain.value = 0.22;
+        this.master.gain.value = 0.85;
         this.master.connect(audioCtx.destination);
       }
       return audioCtx;
@@ -681,10 +681,10 @@
       const beat = s % 8;
 
       if (beat === 0) {
-        this.tone(this.bass[bar] * (fever ? 1.0 : 1), stepDur * 3.2, "triangle", fever ? 0.09 : 0.07, t0);
+        this.tone(this.bass[bar] * (fever ? 1.0 : 1), stepDur * 3.2, "triangle", fever ? 0.16 : 0.12, t0);
       }
       if (beat === 4 && play) {
-        this.tone(this.bass[bar] * 1.5, stepDur * 1.5, "triangle", 0.04, t0);
+        this.tone(this.bass[bar] * 1.5, stepDur * 1.5, "triangle", 0.08, t0);
       }
 
       if (play) {
@@ -696,17 +696,19 @@
         ];
         const idx = patterns[bar][beat];
         if (beat % 2 === 0 || fever) {
-          const f = this.scale[idx] * (fever ? 1.0 : 0.5);
-          this.tone(f, stepDur * 0.85, fever ? "square" : "triangle", fever ? 0.045 : 0.035, t0);
+          const f = this.scale[idx] * (fever ? 1.0 : 0.55);
+          this.tone(f, stepDur * 0.9, fever ? "square" : "triangle", fever ? 0.12 : 0.1, t0);
         }
         if (fever && beat % 2 === 1) {
-          this.tone(this.scale[(idx + 4) % this.scale.length], stepDur * 0.4, "square", 0.02, t0 + stepDur * 0.5);
+          this.tone(this.scale[(idx + 4) % this.scale.length], stepDur * 0.4, "square", 0.06, t0 + stepDur * 0.5);
         }
       } else {
-        if (beat === 0 || beat === 4) {
-          const notes = [0, 2, 4, 5];
-          this.tone(this.scale[notes[bar]], stepDur * 2.8, "sine", 0.03, t0);
-          this.tone(this.scale[notes[bar] + 2], stepDur * 2.8, "sine", 0.018, t0 + 0.02);
+        // メニューもはっきり聞こえるアルペジオ
+        const menuPat = [0, 2, 4, 5, 4, 2, 4, 2];
+        const idx = menuPat[beat];
+        if (beat % 2 === 0) {
+          this.tone(this.scale[idx], stepDur * 1.6, "sine", 0.09, t0);
+          this.tone(this.scale[idx + 2], stepDur * 1.6, "triangle", 0.05, t0 + 0.01);
         }
       }
 
@@ -733,6 +735,12 @@
         this.timer = setInterval(() => {
           if (this.started) this.schedule();
         }, 50);
+        // 開始の合図音（聞こえた確認になる）
+        try {
+          this.tone(523.25, 0.1, "sine", 0.12, this._next);
+          this.tone(659.25, 0.12, "sine", 0.1, this._next + 0.1);
+          this.tone(783.99, 0.16, "sine", 0.1, this._next + 0.22);
+        } catch (_) {}
       } else {
         // 既に動いていれば時刻だけ同期（真ん中から再開しない）
         if (audioCtx && this._next < audioCtx.currentTime - 0.2) {
@@ -750,7 +758,7 @@
     },
 
     setEnabled(on) {
-      if (this.master) this.master.gain.value = on && !Playables.mutedLocal ? 0.22 : 0;
+      if (this.master) this.master.gain.value = on && !Playables.mutedLocal ? 0.85 : 0;
       if (on && !Playables.mutedLocal) {
         try {
           this.ensureCtx();
