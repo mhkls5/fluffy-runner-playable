@@ -3797,19 +3797,19 @@
         const ownedF = Playables.owned[fi];
         const equipped = Playables.skin === fi;
         if (ownedF) {
-          if (!equipped) this.drawButton(W / 2, prevY + 142, 120, 34, t("equip"), "#ff8fb8", true);
+          if (!equipped) this.drawButton(W / 2, prevY + 150, 130, 38, t("equip"), "#ff8fb8", true);
         } else {
           const can = Playables.totalCoins >= sFi.cost;
-          this.drawButton(W / 2, prevY + 142, 160, 34, t("buy") + " " + sFi.cost + "C", can ? "#ff8fb8" : "#ccc", true);
+          this.drawButton(W / 2, prevY + 150, 180, 38, t("buy") + " " + sFi.cost + "C", can ? "#ff8fb8" : "#ccc", true);
         }
       } else {
         ctx.fillStyle = "rgba(70,50,80,0.65)";
         ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
-        ctx.fillText(t("focusHint"), W / 2, prevY + 142);
+        ctx.fillText(t("focusHint"), W / 2, prevY + 150);
       }
 
-      // --- 装備 ---
-      const eqY = prevY + 140;
+      // --- 装備（ボタンと重ならないよう下げる） ---
+      const eqY = prevY + 188;
       ctx.fillStyle = "#3a2a4a";
       ctx.font = `bold ${Math.min(14, W * 0.034)}px sans-serif`;
       ctx.fillText(Playables.lang === "en" ? "Equipment" : "そうび", W / 2, eqY);
@@ -4010,7 +4010,7 @@
       }
       // 中央の装備/購入ボタン
       if (Game.shopFocus >= 0) {
-        if (Math.abs(pt.x - W / 2) < 90 && Math.abs(pt.y - 372) < 24) {
+        if (Math.abs(pt.x - W / 2) < 100 && Math.abs(pt.y - 380) < 28) {
           const fi = Game.shopFocus;
           if (Playables.owned[fi]) Game.focusSkin(fi);
           else Game.confirmBuySkin();
@@ -4018,7 +4018,7 @@
         }
       }
       // 装備チップ（タップで次へ）
-      const eqY = 230 + 140;
+      const eqY = 230 + 188;
       const slots = [
         { key: "hat", list: EQUIP_HAT, get: () => Playables.equipHat },
         { key: "trail", list: EQUIP_TRAIL, get: () => Playables.equipTrail },
