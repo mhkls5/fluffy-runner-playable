@@ -3810,13 +3810,34 @@
         if (this.combo >= 2) {
           const comboT = Math.min(1, this.comboTimer / 2.2);
           const urgent = this.comboTimer < 0.7 && this.comboTimer > 0;
-          ctx.fillStyle = this.feverActive ? "#c07000" : urgent ? "#c03040" : "#d04070";
+          ctx.fillStyle = this.megaFever
+            ? "#c04000"
+            : this.feverActive
+              ? "#c07000"
+              : urgent
+                ? "#c03040"
+                : "#d04070";
           ctx.font = `bold ${Math.min(22, W * 0.05)}px sans-serif`;
           ctx.fillText(this.combo + " " + t("combo"), pad, pad + 82);
           ctx.fillStyle = "rgba(0,0,0,0.15)";
           ctx.fillRect(pad, pad + 88, 80, 6);
-          ctx.fillStyle = this.feverActive ? "#e8a020" : urgent ? "#e85d5d" : "#ff8fb8";
+          ctx.fillStyle = this.megaFever
+            ? "#ff6000"
+            : this.feverActive
+              ? "#e8a020"
+              : urgent
+                ? "#e85d5d"
+                : "#ff8fb8";
           ctx.fillRect(pad, pad + 88, 80 * comboT, 6);
+        }
+        if (this.nearChain >= 2) {
+          ctx.fillStyle = "#2a8a5a";
+          ctx.font = `bold ${Math.min(16, W * 0.038)}px sans-serif`;
+          ctx.fillText(
+            (Playables.lang === "en" ? "NEAR ×" : "ニアミス ×") + this.nearChain,
+            pad,
+            pad + 108
+          );
         }
 
         // フィーバーバー
