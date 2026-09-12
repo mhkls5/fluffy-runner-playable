@@ -1174,7 +1174,9 @@
       if (this.state !== "playing") return;
       const p = this.player;
       // 空中でもう一度押す & ダッシュ可能なら急降下ダッシュ
-      if (!p.onGround && p.jumps >= 1 && this.dashCd <= 0 && !p.diving) {
+      // （ジャンプ直後の誤タップで即ダッシュしないよう短い猶予）
+      const sinceJump = this.time - (this._lastJumpAt || -9);
+      if (!p.onGround && p.jumps >= 1 && this.dashCd <= 0 && !p.diving && sinceJump > 0.12) {
         this.doDash();
         return;
       }
@@ -1186,6 +1188,7 @@
       p.jumps++;
       p.squash = 1;
       p.diving = false;
+      this._lastJumpAt = this.time;
       beep(p.jumps === 1 ? 520 : 720, 0.07, "square", 0.035);
       for (let i = 0; i < 6; i++) {
         this.particles.push({
@@ -3782,21 +3785,42 @@
   };
 
   // ---------- 入力 ----------
+  // スマホでは pointerdown と touchstart の二重発火で
+  // 「ジャンプ直後にダッシュ」等の不具合が出るため pointer のみ使う
+  let lastInputAt = 0;
+
   function pointFromEvent(e) {
+    if (e.clientX != null && e.clientX !== 0) {
+      return { x: e.clientX, y: e.clientY };
+    }
     if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
     if (e.changedTouches && e.changedTouches[0])
       return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
-    return { x: e.clientX, y: e.clientY };
+    return { x: e.clientX || 0, y: e.clientY || 0 };
   }
 
-  function pointerDown(e) {
-    if (e.cancelable) e.preventDefault();
-    // 音（BGM/SFX）は必ずユーザー操作で resume
+  function unlockAudio() {
     try {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === "suspended") audioCtx.resume();
     } catch (_) {}
     Music.start();
+  }
+
+  function pointerDown(e) {
+    // 多重発火ガード（80ms）
+    const now = performance.now();
+    if (now - lastInputAt < 80) {
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+    lastInputAt = now;
+
+    if (e.cancelable) e.preventDefault();
+    // マルチタッチは最初の指のみ
+    if (e.isPrimary === false) return;
+
+    unlockAudio();
     if (Game.state === "menu") Music.setMode("menu");
     const pt = pointFromEvent(e);
 
@@ -3952,8 +3976,25 @@
     if (Game.state === "playing") Game.jump();
   }
 
-  window.addEventListener("pointerdown", pointerDown, { passive: false });
-  window.addEventListener("touchstart", pointerDown, { passive: false });
+  // pointer events を優先（スマホ二重発火を防ぐ）
+  if (window.PointerEvent) {
+    window.addEventListener("pointerdown", pointerDown, { passive: false });
+  } else {
+    window.addEventListener("mousedown", pointerDown, { passive: false });
+    window.addEventListener("touchstart", pointerDown, { passive: false });
+  }
+  // スクロール・ピンチ・長押しメニューを抑止
+  window.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.cancelable) e.preventDefault();
+    },
+    { passive: false }
+  );
+  document.addEventListener("gesturestart", (e) => e.preventDefault());
+  document.addEventListener("contextmenu", (e) => {
+    if (Game.state === "playing") e.preventDefault();
+  });
   window.addEventListener(
     "keydown",
     (e) => {
