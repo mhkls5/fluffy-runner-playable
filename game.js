@@ -1260,7 +1260,7 @@
       this.cameos = [];
       this.particles = [];
       this.floatTexts = [];
-      this.spawnTimer = 1.0;
+      this.spawnTimer = 1.6;
       this.shake = 0;
       this.coinCount = 0;
       this.coinFlash = 0;
@@ -1457,8 +1457,9 @@
           Music.setMode("fever");
           this.notice = t("fever");
           this.noticeT = 2;
-          this.hitFlash = 0.4;
-          this.shake = Math.max(this.shake, 4);
+          this.hitFlash = 0.45;
+          this.shake = Math.max(this.shake, 5);
+          this.speedLines = 1;
           beep(784, 0.1, "triangle", 0.05);
           setTimeout(() => beep(988, 0.1, "triangle", 0.05), 80);
           setTimeout(() => beep(1175, 0.15, "triangle", 0.05), 160);
@@ -1933,8 +1934,9 @@
       this.score += gdt * (10 + this.speed * 0.01) * (this.feverActive ? 2 : 1) * (this.doublePts > 0 ? 2 : 1);
       this.displayScore += (this.score - this.displayScore) * Math.min(1, dt * 8);
       bumpMission("bestRunScore", Math.floor(this.score), true);
-      this.speed = this.baseSpeed + this.score * 1.55;
-      this.speed = Math.min(this.speed, this.baseSpeed * (this.feverActive ? 2.9 : 2.35));
+      this.speed = this.baseSpeed + this.score * 1.25;
+      const maxMul = this.feverActive ? 2.7 : 2.15;
+      this.speed = Math.min(this.speed, this.baseSpeed * maxMul);
       if (this.dash > 0) this.speed *= 1.35;
       this.worldOffset += this.speed * gdt;
 
@@ -1946,6 +1948,7 @@
           Playables.lang === "en" ? ms * 250 + " points!" : ms * 250 + " 点きた！";
         this.milestoneT = 1.5;
         this.addScore(50, W / 2, H * 0.3, "+50 ボーナス", "#7dffa8");
+        this.shake = Math.max(this.shake, 3);
         beep(1046, 0.08, "triangle", 0.04);
       }
 
@@ -2067,9 +2070,19 @@
       // 障害物
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
-        const gap = 0.95 + Math.random() * 0.55 - Math.min(0.4, this.score / 1800);
-        this.spawnTimer = Math.max(0.55, gap);
-        const kinds = ["bush", "rock", "puddle"];
+        // 序盤ゆるい → 中盤標準 → 終盤きつい
+        const s = this.score;
+        let gap;
+        if (s < 120) {
+          gap = 1.25 + Math.random() * 0.55;
+        } else if (s < 400) {
+          gap = 0.9 + Math.random() * 0.5 - Math.min(0.15, (s - 120) / 2000);
+        } else {
+          gap = 0.7 + Math.random() * 0.4 - Math.min(0.18, (s - 400) / 2500);
+        }
+        this.spawnTimer = Math.max(0.62, gap);
+        // 序盤は岩石を出さない
+        const kinds = s < 150 ? ["bush", "puddle", "bush"] : ["bush", "rock", "puddle"];
         const kind = kinds[Math.floor(Math.random() * kinds.length)];
         let w = 40,
           h = 36;
@@ -2192,9 +2205,9 @@
         if (o.x + o.w < -40) this.obstacles.splice(i, 1);
       }
 
-      // 飛ぶ鳥（上空の障害物）
+      // 飛ぶ鳥はスコア 200 以降から
       this.birdTimer -= gdt;
-      if (this.birdTimer <= 0 && this.score > 80) {
+      if (this.birdTimer <= 0 && this.score > 200) {
         this.birdTimer = 7 + Math.random() * 6 - Math.min(3, this.score / 400);
         const high = Math.random() < 0.5;
         this.birds.push({
