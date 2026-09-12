@@ -214,6 +214,9 @@
       jumpPow: "ジャンプ力",
       coinVal: "コイン価値",
       startSpd: "開始スピード",
+      jumpEff: "ジャンプが高く",
+      coinEff: "スコア＆所持コインUP",
+      startEff: "開始が速い（高得点向け）",
     },
     en: {
       title: "Fluffy Runner",
@@ -271,6 +274,9 @@
       jumpPow: "Jump power",
       coinVal: "Coin value",
       startSpd: "Start speed",
+      jumpEff: "Jump higher",
+      coinEff: "Score & wallet coins UP",
+      startEff: "Faster start (for score)",
     },
   };
 
@@ -1035,7 +1041,7 @@
         return;
       }
       if (p.jumps >= p.maxJumps) return;
-      const boost = 1 + Playables.upJump * 0.06;
+      const boost = 1 + Playables.upJump * 0.1;
       const jumpForce = -Math.min(780, H * 1.15) * boost * skinAbil().jump;
       p.vy = p.jumps === 0 ? jumpForce : jumpForce * 0.82;
       p.onGround = false;
