@@ -38,6 +38,7 @@
     uncleStreakDate: "",
     bestBonusDate: "",
     bestBonusClaimed: false,
+    tutorialSeen: false,
     ownedEquip: { hat: [true, false, false, false], trail: [true, false, false], charm: [true, false, false, false] },
     equipHat: 0,
     equipTrail: 0,
@@ -77,6 +78,7 @@
         uncleStreakDate: this.uncleStreakDate,
         bestBonusDate: this.bestBonusDate,
         bestBonusClaimed: this.bestBonusClaimed,
+        tutorialSeen: this.tutorialSeen,
         showGhost: this.showGhost,
         ownedEquip: this.ownedEquip,
         equipHat: this.equipHat,
@@ -118,6 +120,7 @@
       if (typeof d.uncleStreakDate === "string") this.uncleStreakDate = d.uncleStreakDate;
       if (typeof d.bestBonusDate === "string") this.bestBonusDate = d.bestBonusDate;
       if (typeof d.bestBonusClaimed === "boolean") this.bestBonusClaimed = d.bestBonusClaimed;
+      if (typeof d.tutorialSeen === "boolean") this.tutorialSeen = d.tutorialSeen;
       if (typeof d.showGhost === "boolean") this.showGhost = d.showGhost;
       else this.showGhost = false;
       if (d.ownedEquip) {
@@ -1170,6 +1173,7 @@
     shopScroll: 0,
     shopFocus: -1,
     showLogin: false,
+    showTutorial: false,
     notice: "",
     noticeT: 0,
     _forcePause: false,
@@ -1308,6 +1312,11 @@
       this.baseSpeed = Math.max(280, W * 0.45) * (1 + Playables.upStart * 0.08);
       this.reset();
       this.state = "playing";
+      // 初回のみチュートリアル
+      if (!Playables.tutorialSeen) {
+        this.showTutorial = true;
+        this._forcePause = true;
+      }
       Music.start();
       Music.setMode("play");
       Playables.runs++;
@@ -1691,6 +1700,18 @@
           (Playables.lang === "en" ? "Day " + day + " +" : day + " 日目 +") + got + "C";
         this.noticeT = 1.8;
       }
+    },
+
+    openTutorial() {
+      this.showTutorial = true;
+      if (this.state === "playing") this._forcePause = true;
+    },
+
+    closeTutorial() {
+      this.showTutorial = false;
+      Playables.tutorialSeen = true;
+      Playables.persist();
+      if (this.state === "playing") this._forcePause = false;
     },
 
     setPaused(v) {
@@ -2459,6 +2480,7 @@
 
       this.drawUI();
       if (this.showLogin && this.state === "menu") this.drawLoginBonus();
+      if (this.showTutorial) this.drawTutorial();
       ctx.restore();
     },
 
@@ -3502,6 +3524,42 @@
       }
     },
 
+    drawTutorial() {
+      ctx.fillStyle = "rgba(40,20,50,0.55)";
+      ctx.fillRect(0, 0, W, H);
+      const pw = Math.min(W * 0.92, 360);
+      const ph = Math.min(H * 0.7, 380);
+      this.drawPanel(W / 2, H / 2, pw, ph);
+      const top = H / 2 - ph / 2;
+      ctx.fillStyle = "#3a2a4a";
+      ctx.textAlign = "center";
+      ctx.font = `bold ${Math.min(20, W * 0.048)}px sans-serif`;
+      ctx.fillText(Playables.lang === "en" ? "How to play" : "あそびかた", W / 2, top + 36);
+
+      const lines =
+        Playables.lang === "en"
+          ? [
+              "1. Tap to JUMP (double jump OK)",
+              "2. 3rd tap = DASH through bushes",
+              "3. Collect coins · build COMBO",
+              "4. Touch uncle ( ! ) for bonus",
+              "5. Fever ×2 when gauge is full",
+            ]
+          : [
+              "1. タップでジャンプ（2段まで）",
+              "2. 3回目タップでダッシュ破壊",
+              "3. コインを集めてコンボ！",
+              "4. 「！」のおじさんに触れるとボーナス",
+              "5. ゲージ満タンでフィーバー×2",
+            ];
+      ctx.font = `${Math.min(14, W * 0.034)}px sans-serif`;
+      ctx.fillStyle = "#5a4a5a";
+      for (let i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], W / 2, top + 78 + i * 36);
+      }
+      this.drawButton(W / 2, top + ph - 48, 160, 44, Playables.lang === "en" ? "Got it!" : "わかった！", "#ff8fb8");
+    },
+
     drawUI() {
       const pad = Math.min(20, W * 0.04);
 
@@ -3590,6 +3648,8 @@
         const btnY = panelTop + 120;
         this.drawButton(W / 2 - 70, btnY, 120, 46, t("play"), "#ff8fb8");
         this.drawButton(W / 2 + 70, btnY, 120, 46, t("shop"), "#7ec8e8");
+        // あそびかた
+        this.drawButton(W / 2, btnY + 52, 140, 32, Playables.lang === "en" ? "How to play" : "あそびかた", "#b8a9d4", true);
 
         // 今日のチャレンジ
         const tb = Playables.todayBest || 0;
@@ -4192,6 +4252,18 @@
     if (Game.state === "menu") Music.setMode("menu");
     const pt = pointFromEvent(e);
 
+    // チュートリアル優先
+    if (Game.showTutorial) {
+      const pw = Math.min(W * 0.92, 360);
+      const ph = Math.min(H * 0.7, 380);
+      const btnY = H / 2 + ph / 2 - 48;
+      if (Math.abs(pt.x - W / 2) < 100 && Math.abs(pt.y - btnY) < 36) {
+        Game.closeTutorial();
+        return;
+      }
+      return;
+    }
+
     // ログインボーナス優先
     if (Game.showLogin && Game.state === "menu") {
       const ph = Math.min(H * 0.72, 420);
@@ -4240,6 +4312,10 @@
       const panelH = 200;
       const panelCy = Math.max(130, H * 0.26);
       const btnY = panelCy - panelH / 2 + 120;
+      if (Math.abs(pt.x - W / 2) < 80 && Math.abs(pt.y - (btnY + 52)) < 24) {
+        Game.openTutorial();
+        return;
+      }
       if (Math.abs(pt.x - (W / 2 - 70)) < 70 && Math.abs(pt.y - btnY) < 36) {
         Game.start();
         return;
