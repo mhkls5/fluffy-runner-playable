@@ -595,6 +595,7 @@
     { id: "skinBuy", ja: "コレクター", en: "Collector", descJa: "スキンを1つ買う", descEn: "Buy a skin", check: () => Playables.owned.some((o, i) => i > 0 && o) },
     { id: "near10", ja: "ニアミス10", en: "10 Near-miss", descJa: "1ランでニアミス10", descEn: "10 near-misses in a run", check: (G) => G.nearMisses >= 10 },
     { id: "uncle", ja: "おじさんと友達", en: "Uncle Friend", descJa: "おじさんボーナス", descEn: "Uncle bonus", check: (G) => G._sawUncle },
+    { id: "uncleCatch", ja: "おじさん捕獲", en: "Uncle Catch", descJa: "おじさんを捕まえる", descEn: "Catch the uncle", check: (G) => (G._caughtUncle || 0) >= 1 },
   ];
 
   function checkBadges(G) {
@@ -1613,18 +1614,19 @@
         bobSpeed: 6 + Math.random() * 4,
         frame: 0,
         dropsCoins: type === "ojisan" || type === "grandma",
+        chaseable: type === "ojisan",
+        caught: false,
       });
       if (type === "ojisan") {
-        // ★イベント化：おじさんボーナス
+        // ★イベント化：おじさんボーナス＋追跡
         this._sawUncle = true;
-        this.notice = t("ojisanBonus");
+        this.notice = Playables.lang === "en" ? "CHASE the uncle!" : "おじさんを追え！";
         this.noticeT = 2.4;
         this.magnet = Math.max(this.magnet, 6);
         this.shield = Math.max(this.shield, 1);
         this.shake = Math.max(this.shake, 5);
         this.speedLines = 1;
         this.addScore(50, W / 2, H * 0.3, "+50 " + t("ojisanBonus"), "#ffd56a");
-        // コインの雨
         for (let i = 0; i < 12; i++) {
           this.coins.push({
             x: W + 20 + Math.random() * 120 + i * 22,
@@ -2088,6 +2090,45 @@
             spin: Math.random() * 6,
             got: false,
           });
+        }
+        // おじさん追跡：触れると捕獲ボーナス
+        if (g.chaseable && !g.caught) {
+          const gw = 40 * (g.scale || 1);
+          const gh = 70 * (g.scale || 1);
+          if (
+            p.x + p.w - 6 > g.x - gw * 0.4 &&
+            p.x + 6 < g.x + gw * 0.6 &&
+            p.y + p.h > g.y - gh &&
+            p.y < g.y + 10
+          ) {
+            g.caught = true;
+            this._caughtUncle = (this._caughtUncle || 0) + 1;
+            this.addScore(80, g.x, g.y - 50, "CAPTURE +80", "#ffd56a");
+            Playables.totalCoins += 40;
+            this.magnet = Math.max(this.magnet, 4);
+            this.fever = Math.min(1, (this.fever || 0) + 0.35);
+            this.notice = Playables.lang === "en" ? "Uncle caught! +40C" : "おじさん捕獲！ +40C";
+            this.noticeT = 2;
+            this.shake = 10;
+            for (let k = 0; k < 16; k++) {
+              const a = (Math.PI * 2 * k) / 16;
+              this.particles.push({
+                x: g.x,
+                y: g.y - 40,
+                vx: Math.cos(a) * 140,
+                vy: Math.sin(a) * 140 - 30,
+                life: 0.5,
+                max: 0.5,
+                c: k % 2 ? "#ffd56a" : "#ff8fb8",
+                r: 3 + Math.random() * 3,
+              });
+            }
+            beep(523, 0.08, "triangle", 0.05);
+            setTimeout(() => beep(659, 0.08, "triangle", 0.05), 80);
+            setTimeout(() => beep(784, 0.1, "triangle", 0.05), 160);
+            setTimeout(() => beep(1046, 0.16, "triangle", 0.045), 240);
+            Playables.persist();
+          }
         }
         if (g.x < -120 || g.x > W + 120) this.cameos.splice(i, 1);
       }
@@ -2849,6 +2890,23 @@
       ctx.restore();
       if (this.noticeT > 0 && (this.notice === t("ojisan") || this.notice === t("ojisanBonus") || this.notice === "あっ、おじさんだ！！") && g.type === "ojisan") {
         this.drawBubble(x, y - 70 * s, t("ojisan"));
+      }
+      // 追跡マーク
+      if (g.chaseable && !g.caught) {
+        const bounce = Math.sin(this.time * 8) * 4;
+        ctx.save();
+        ctx.translate(x, y - 95 * s + bounce);
+        ctx.fillStyle = "#ff5050";
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-16, -18, 32, 28, 8);
+        else ctx.fillRect(-16, -18, 32, 28);
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 20px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("!", 0, -3);
+        ctx.restore();
       }
     },
 
