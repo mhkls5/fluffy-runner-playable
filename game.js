@@ -1629,7 +1629,7 @@
       if (type === "ojisan") {
         // ★イベント化：おじさんボーナス＋追跡
         this._sawUncle = true;
-        this.notice = Playables.lang === "en" ? "CHASE the uncle!" : "おじさんを追え！";
+        this.notice = Playables.lang === "en" ? "Touch the uncle!" : "おじさんに触れよう！";
         this.noticeT = 2.4;
         this.magnet = Math.max(this.magnet, 6);
         this.shield = Math.max(this.shield, 1);
@@ -2112,15 +2112,15 @@
             got: false,
           });
         }
-        // おじさん追跡：触れると捕獲ボーナス（判定は大きめ）
+        // おじさん追跡：触れれば捕獲（ジャンプ不要・判定は大きめ）
         if (g.chaseable && !g.caught) {
-          const gw = 48 * (g.scale || 1);
-          const gh = 78 * (g.scale || 1);
+          const gw = 56 * (g.scale || 1);
+          const gh = 90 * (g.scale || 1);
           if (
-            p.x + p.w - 2 > g.x - gw * 0.55 &&
-            p.x + 2 < g.x + gw * 0.75 &&
-            p.y + p.h + 4 > g.y - gh &&
-            p.y - 4 < g.y + 14
+            p.x + p.w > g.x - gw * 0.6 &&
+            p.x < g.x + gw * 0.85 &&
+            p.y + p.h + 10 > g.y - gh &&
+            p.y - 10 < g.y + 20
           ) {
             g.caught = true;
             this._caughtUncle = (this._caughtUncle || 0) + 1;
