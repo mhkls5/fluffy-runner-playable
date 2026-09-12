@@ -3560,6 +3560,47 @@
       this.drawButton(W / 2, top + ph - 48, 160, 44, Playables.lang === "en" ? "Got it!" : "わかった！", "#ff8fb8");
     },
 
+    langSegLayout() {
+      const segH = 32;
+      const segW = Math.min(88, W * 0.2);
+      const totalW = segW * 2 + 6;
+      const sx = W / 2 - totalW / 2;
+      const sy = 12;
+      return { segH, segW, totalW, sx, sy };
+    },
+
+    drawLangSegment() {
+      if (this.state !== "menu" && this.state !== "shop") return;
+      const { segH, segW, totalW, sx, sy } = this.langSegLayout();
+      const isJa = Playables.lang !== "en";
+      // 日本語
+      ctx.fillStyle = isJa ? "#ff8fb8" : "rgba(255,255,255,0.92)";
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(sx, sy, segW, segH, 10);
+      else ctx.fillRect(sx, sy, segW, segH);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(180,160,180,0.5)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = isJa ? "#fff" : "#5a4a5a";
+      ctx.font = `bold ${Math.min(13, segW * 0.16)}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("日本語", sx + segW / 2, sy + segH / 2 + 1);
+      // English
+      const ex = sx + segW + 6;
+      ctx.fillStyle = !isJa ? "#6bb6ff" : "rgba(255,255,255,0.92)";
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(ex, sy, segW, segH, 10);
+      else ctx.fillRect(ex, sy, segW, segH);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = !isJa ? "#fff" : "#5a4a5a";
+      ctx.fillText("English", ex + segW / 2, sy + segH / 2 + 1);
+      ctx.textBaseline = "alphabetic";
+      ctx.textAlign = "left";
+    },
+
     drawUI() {
       const pad = Math.min(20, W * 0.04);
 
@@ -3578,38 +3619,6 @@
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(Playables.mutedLocal ? "🔇" : "🔊", muteX, btnY + 1);
-        ctx.textBaseline = "alphabetic";
-        ctx.textAlign = "left";
-      }
-
-      // 言語セグメント（メニュー / ショップのみ・押しやすい）
-      if (this.state === "menu" || this.state === "shop") {
-        const segH = 32;
-        const segW = Math.min(88, W * 0.2);
-        const totalW = segW * 2 + 6;
-        const sx = W / 2 - totalW / 2;
-        const sy = this.state === "menu" ? H * 0.12 : 78;
-        const isJa = Playables.lang !== "en";
-        // 日本語
-        ctx.fillStyle = isJa ? "#ff8fb8" : "rgba(255,255,255,0.85)";
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(sx, sy, segW, segH, 10);
-        else ctx.fillRect(sx, sy, segW, segH);
-        ctx.fill();
-        ctx.fillStyle = isJa ? "#fff" : "#5a4a5a";
-        ctx.font = `bold ${Math.min(13, segW * 0.16)}px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("日本語", sx + segW / 2, sy + segH / 2 + 1);
-        // English
-        const ex = sx + segW + 6;
-        ctx.fillStyle = !isJa ? "#6bb6ff" : "rgba(255,255,255,0.85)";
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(ex, sy, segW, segH, 10);
-        else ctx.fillRect(ex, sy, segW, segH);
-        ctx.fill();
-        ctx.fillStyle = !isJa ? "#fff" : "#5a4a5a";
-        ctx.fillText("English", ex + segW / 2, sy + segH / 2 + 1);
         ctx.textBaseline = "alphabetic";
         ctx.textAlign = "left";
       }
@@ -3702,6 +3711,9 @@
       if (this.state === "shop") {
         this.drawShop();
       }
+
+      // 言語は最後に描く（パネルの下に隠れない）
+      this.drawLangSegment();
 
       if (this.state === "playing") {
         ctx.textAlign = "left";
@@ -4297,19 +4309,15 @@
       }
     }
 
-    // 言語セグメント
+    // 言語セグメント（最前面）
     if (Game.state === "menu" || Game.state === "shop") {
-      const segH = 32;
-      const segW = Math.min(88, W * 0.2);
-      const totalW = segW * 2 + 6;
-      const sx = W / 2 - totalW / 2;
-      const sy = Game.state === "menu" ? H * 0.12 : 78;
-      if (pt.y >= sy - 4 && pt.y <= sy + segH + 4) {
-        if (pt.x >= sx - 4 && pt.x <= sx + segW + 4) {
+      const { segH, segW, totalW, sx, sy } = Game.langSegLayout();
+      if (pt.y >= sy - 6 && pt.y <= sy + segH + 6) {
+        if (pt.x >= sx - 6 && pt.x <= sx + segW + 6) {
           Game.setLang("ja");
           return;
         }
-        if (pt.x >= sx + segW + 2 && pt.x <= sx + totalW + 4) {
+        if (pt.x >= sx + segW + 2 && pt.x <= sx + totalW + 6) {
           Game.setLang("en");
           return;
         }
