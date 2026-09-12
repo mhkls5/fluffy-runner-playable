@@ -70,7 +70,10 @@
             if (typeof d.missionDate === "string") this.missionDate = d.missionDate;
             if (d.missionProgress) this.missionProgress = Object.assign(this.missionProgress, d.missionProgress);
             if (Array.isArray(d.missionClaimed)) this.missionClaimed = d.missionClaimed;
-            if (d.lang === "ja" || d.lang === "en") this.lang = d.lang;
+            if (d.lang === "ja" || d.lang === "en") {
+              this.lang = d.lang;
+              this._langSaved = true;
+            }
             if (typeof d.mutedLocal === "boolean") this.mutedLocal = d.mutedLocal;
             if (typeof d.loginDate === "string") this.loginDate = d.loginDate;
             if (typeof d.loginStreak === "number") this.loginStreak = d.loginStreak;
@@ -1216,14 +1219,24 @@
       Music.setEnabled(v);
     },
 
-    toggleLang() {
-      Playables.lang = Playables.lang === "ja" ? "en" : "ja";
+    setLang(lang) {
+      if (lang !== "ja" && lang !== "en") return;
+      if (Playables.lang === lang) return;
+      Playables.lang = lang;
+      Playables._langSaved = true;
       Playables.persist();
       ensureDailyMissions();
       for (const m of dailyMissions) {
         const def = MISSION_DEFS.find((d) => d.type === m.type);
         if (def) m.label = def.label(m.target);
       }
+      Game.notice = lang === "en" ? "Language: English" : "ことば: 日本語";
+      Game.noticeT = 1.3;
+      beep(660, 0.06, "sine", 0.03);
+    },
+
+    toggleLang() {
+      this.setLang(Playables.lang === "ja" ? "en" : "ja");
     },
 
     toggleMute() {
@@ -2619,31 +2632,53 @@
     drawUI() {
       const pad = Math.min(20, W * 0.04);
 
-      // 言語 / ミュート（全画面共通・タッチしやすい大きさ）
+      // ミュート（全画面） / 言語（メニュー・ショップで明示）
       if (this.state !== "loading") {
         const btnR = Math.min(22, W * 0.05);
         const muteX = W - pad - btnR;
-        const langX = muteX - btnR * 2.2;
         const btnY = pad + btnR + 4;
         // ミュート
-        ctx.fillStyle = Playables.mutedLocal ? "rgba(200,120,140,0.9)" : "rgba(255,255,255,0.85)";
+        ctx.fillStyle = Playables.mutedLocal ? "rgba(200,120,140,0.9)" : "rgba(255,255,255,0.88)";
         ctx.beginPath();
         ctx.arc(muteX, btnY, btnR, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = Playables.mutedLocal ? "#fff" : "#5a4a6a";
+        ctx.fillStyle = Playables.mutedLocal ? "#fff" : "#3a2a4a";
         ctx.font = `bold ${Math.min(14, btnR)}px sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(Playables.mutedLocal ? "🔇" : "🔊", muteX, btnY + 1);
-        // 言語
-        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        ctx.textBaseline = "alphabetic";
+        ctx.textAlign = "left";
+      }
+
+      // 言語セグメント（メニュー / ショップのみ・押しやすい）
+      if (this.state === "menu" || this.state === "shop") {
+        const segH = 32;
+        const segW = Math.min(88, W * 0.2);
+        const totalW = segW * 2 + 6;
+        const sx = W / 2 - totalW / 2;
+        const sy = this.state === "menu" ? H * 0.12 : 78;
+        const isJa = Playables.lang !== "en";
+        // 日本語
+        ctx.fillStyle = isJa ? "#ff8fb8" : "rgba(255,255,255,0.85)";
         ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(langX - btnR, btnY - btnR * 0.7, btnR * 2, btnR * 1.4, 8);
-        else ctx.fillRect(langX - btnR, btnY - btnR * 0.7, btnR * 2, btnR * 1.4);
+        if (ctx.roundRect) ctx.roundRect(sx, sy, segW, segH, 10);
+        else ctx.fillRect(sx, sy, segW, segH);
         ctx.fill();
-        ctx.fillStyle = "#5a4a6a";
-        ctx.font = `bold ${Math.min(12, btnR * 0.7)}px sans-serif`;
-        ctx.fillText(t("langBtn"), langX, btnY + 1);
+        ctx.fillStyle = isJa ? "#fff" : "#5a4a5a";
+        ctx.font = `bold ${Math.min(13, segW * 0.16)}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("日本語", sx + segW / 2, sy + segH / 2 + 1);
+        // English
+        const ex = sx + segW + 6;
+        ctx.fillStyle = !isJa ? "#6bb6ff" : "rgba(255,255,255,0.85)";
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(ex, sy, segW, segH, 10);
+        else ctx.fillRect(ex, sy, segW, segH);
+        ctx.fill();
+        ctx.fillStyle = !isJa ? "#fff" : "#5a4a5a";
+        ctx.fillText("English", ex + segW / 2, sy + segH / 2 + 1);
         ctx.textBaseline = "alphabetic";
         ctx.textAlign = "left";
       }
@@ -3082,20 +3117,34 @@
       return;
     }
 
-    // ミュート / 言語（全画面）
+    // ミュート（全画面）
     if (Game.state !== "loading") {
       const btnR = Math.min(22, W * 0.05);
       const pad = Math.min(20, W * 0.04);
       const muteX = W - pad - btnR;
-      const langX = muteX - btnR * 2.2;
       const btnY = pad + btnR + 4;
       if (Math.hypot(pt.x - muteX, pt.y - btnY) < btnR + 8) {
         Game.toggleMute();
         return;
       }
-      if (Math.abs(pt.x - langX) < btnR + 8 && Math.abs(pt.y - btnY) < btnR + 8) {
-        Game.toggleLang();
-        return;
+    }
+
+    // 言語セグメント
+    if (Game.state === "menu" || Game.state === "shop") {
+      const segH = 32;
+      const segW = Math.min(88, W * 0.2);
+      const totalW = segW * 2 + 6;
+      const sx = W / 2 - totalW / 2;
+      const sy = Game.state === "menu" ? H * 0.12 : 78;
+      if (pt.y >= sy - 4 && pt.y <= sy + segH + 4) {
+        if (pt.x >= sx - 4 && pt.x <= sx + segW + 4) {
+          Game.setLang("ja");
+          return;
+        }
+        if (pt.x >= sx + segW + 2 && pt.x <= sx + totalW + 4) {
+          Game.setLang("en");
+          return;
+        }
       }
     }
 
@@ -3231,6 +3280,11 @@
     Game.baseSpeed = Math.max(280, W * 0.45);
     Game.layout();
     Game.state = "menu";
+    // 初回はブラウザ言語から自動判定（保存済みならそれを優先）
+    try {
+      const n = (navigator.language || "ja").toLowerCase();
+      if (!Playables._langSaved && n.indexOf("ja") !== 0) Playables.lang = "en";
+    } catch (_) {}
     ensureDailyMissions();
     checkLoginBonus();
     if (Playables.loginPending) Game.showLogin = true;
