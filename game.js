@@ -33,6 +33,11 @@
     yesterdayBest: 0,
     topScores: [], // 最大5件
     badges: {}, // id -> true
+    chainMission: null, // { type, target, reward, claimed, date }
+    uncleStreak: 0,
+    uncleStreakDate: "",
+    bestBonusDate: "",
+    bestBonusClaimed: false,
     ownedEquip: { hat: [true, false, false, false], trail: [true, false, false], charm: [true, false, false, false] },
     equipHat: 0,
     equipTrail: 0,
@@ -67,6 +72,11 @@
         yesterdayBest: this.yesterdayBest,
         topScores: this.topScores,
         badges: this.badges,
+        chainMission: this.chainMission,
+        uncleStreak: this.uncleStreak,
+        uncleStreakDate: this.uncleStreakDate,
+        bestBonusDate: this.bestBonusDate,
+        bestBonusClaimed: this.bestBonusClaimed,
         showGhost: this.showGhost,
         ownedEquip: this.ownedEquip,
         equipHat: this.equipHat,
@@ -103,6 +113,11 @@
       if (typeof d.yesterdayBest === "number") this.yesterdayBest = d.yesterdayBest;
       if (Array.isArray(d.topScores)) this.topScores = d.topScores;
       if (d.badges) this.badges = d.badges;
+      if (d.chainMission) this.chainMission = d.chainMission;
+      if (typeof d.uncleStreak === "number") this.uncleStreak = d.uncleStreak;
+      if (typeof d.uncleStreakDate === "string") this.uncleStreakDate = d.uncleStreakDate;
+      if (typeof d.bestBonusDate === "string") this.bestBonusDate = d.bestBonusDate;
+      if (typeof d.bestBonusClaimed === "boolean") this.bestBonusClaimed = d.bestBonusClaimed;
       if (typeof d.showGhost === "boolean") this.showGhost = d.showGhost;
       else this.showGhost = false;
       if (d.ownedEquip) {
@@ -446,6 +461,7 @@
           smash: 0,
         };
         Playables.missionClaimed = [false, false, false];
+        Playables.bestBonusClaimed = false;
         Playables.persist();
       }
       const rnd = mulberry32(hashStr("fluffy-" + key));
@@ -473,6 +489,37 @@
     return p[type] || 0;
   }
 
+  function allDailyDone() {
+    ensureDailyMissions();
+    return (
+      Playables.missionClaimed &&
+      Playables.missionClaimed.length >= 3 &&
+      Playables.missionClaimed[0] &&
+      Playables.missionClaimed[1] &&
+      Playables.missionClaimed[2]
+    );
+  }
+
+  function ensureChainMission() {
+    const key = todayKey();
+    if (!Playables.chainMission || Playables.chainMission.date !== key) {
+      Playables.chainMission = {
+        date: key,
+        type: "score",
+        target: 800,
+        reward: 80,
+        label:
+          Playables.lang === "en"
+            ? "CHAIN: Score 800 in one run"
+            : "連鎖: 1回で 800 点とる",
+        claimed: false,
+        progress: 0,
+      };
+      Playables.persist();
+    }
+    return Playables.chainMission;
+  }
+
   /** ミッション進捗を加算。達成したら自動で報酬付与 */
   function bumpMission(type, amount, isMax) {
     ensureDailyMissions();
@@ -495,8 +542,63 @@
         beep(784, 0.08, "triangle", 0.05);
         setTimeout(() => beep(988, 0.08, "triangle", 0.05), 90);
         setTimeout(() => beep(1318, 0.14, "triangle", 0.045), 180);
+        // 3本クリアで連鎖ミッション解禁
+        if (allDailyDone()) {
+          ensureChainMission();
+          Game.notice =
+            Playables.lang === "en"
+              ? "CHAIN mission unlocked!"
+              : "連鎖ミッション解禁！";
+          Game.noticeT = 2.4;
+        }
       }
     }
+    // 連鎖ミッション（スコア）
+    if (type === "bestRunScore" && allDailyDone()) {
+      const ch = ensureChainMission();
+      if (!ch.claimed) {
+        ch.progress = Math.max(ch.progress || 0, amount);
+        if (ch.progress >= ch.target) {
+          ch.claimed = true;
+          Playables.totalCoins += ch.reward;
+          Playables.persist();
+          Game.notice =
+            (Playables.lang === "en" ? "CHAIN clear! +" : "連鎖クリア！ +") +
+            ch.reward +
+            "C";
+          Game.noticeT = 2.4;
+          beep(880, 0.1, "triangle", 0.05);
+          setTimeout(() => beep(1175, 0.14, "triangle", 0.045), 100);
+        } else {
+          Playables.persist();
+        }
+      }
+    }
+  }
+
+  function noteUncleCaught() {
+    const key = todayKey();
+    if (Playables.uncleStreakDate !== key) {
+      // 前日から連続なら維持、途切れていたら1
+      const y = new Date();
+      y.setDate(y.getDate() - 1);
+      const yKey =
+        y.getFullYear() +
+        "-" +
+        String(y.getMonth() + 1).padStart(2, "0") +
+        "-" +
+        String(y.getDate()).padStart(2, "0");
+      Playables.uncleStreak =
+        Playables.uncleStreakDate === yKey
+          ? Math.min(9, (Playables.uncleStreak || 0) + 1)
+          : 1;
+      Playables.uncleStreakDate = key;
+    }
+    const streak = Playables.uncleStreak || 1;
+    const bonus = streak * 10;
+    Playables.totalCoins += bonus;
+    Playables.persist();
+    return { streak, bonus };
   }
 
   function remainingDaysHint() {
@@ -1305,6 +1407,25 @@
       this.comboTimer = 2.2 * ab.comboT;
       this.comboMax = Math.max(this.comboMax, this.combo);
       gainSkinXp(1);
+      // コンボ節目ボーナス
+      if (this.combo === 5 || this.combo === 10 || this.combo === 20 || this.combo === 30) {
+        const mile = this.combo === 5 ? 15 : this.combo === 10 ? 30 : this.combo === 20 ? 60 : 100;
+        this.addScore(mile, c.x, c.y - 40, "COMBO " + this.combo + " +"+mile, "#ffe066");
+        Playables.totalCoins += Math.floor(mile / 3);
+        for (let k = 0; k < 10; k++) {
+          const a = (Math.PI * 2 * k) / 10;
+          this.particles.push({
+            x: c.x,
+            y: c.y,
+            vx: Math.cos(a) * 100,
+            vy: Math.sin(a) * 100,
+            life: 0.45,
+            max: 0.45,
+            c: "#ffe066",
+            r: 3 + Math.random() * 2,
+          });
+        }
+      }
       bumpMission("coins", 1);
       bumpMission("maxCombo", this.combo, true);
       // フィーバーチャージ
@@ -1407,6 +1528,18 @@
           Playables.ghost = { score: final, ys: this._ghostRec.slice(0, 250) };
         }
         await Playables.persist();
+      }
+      // 今日のベスト更新ボーナス（1日1回）
+      if (this._todayNew) {
+        const bk = todayKey();
+        if (Playables.bestBonusDate !== bk || !Playables.bestBonusClaimed) {
+          Playables.bestBonusDate = bk;
+          Playables.bestBonusClaimed = true;
+          Playables.totalCoins += 50;
+          this.notice = Playables.lang === "en" ? "Today's best! +50C" : "今日のベスト更新！ +50C";
+          this.noticeT = 2;
+          await Playables.persist();
+        }
       }
       checkBadges(this);
       this._overCount++;
@@ -2124,12 +2257,16 @@
           ) {
             g.caught = true;
             this._caughtUncle = (this._caughtUncle || 0) + 1;
+            const ust = noteUncleCaught();
             this.addScore(80, g.x, g.y - 50, "CAPTURE +80", "#ffd56a");
             Playables.totalCoins += 40;
             this.magnet = Math.max(this.magnet, 4);
             this.fever = Math.min(1, (this.fever || 0) + 0.35);
-            this.notice = Playables.lang === "en" ? "Uncle caught! +40C" : "おじさん捕獲！ +40C";
-            this.noticeT = 2;
+            this.notice =
+              (Playables.lang === "en"
+                ? "Uncle caught! streak x" + ust.streak + " +" + (40 + ust.bonus) + "C"
+                : "おじさん捕獲！連続" + ust.streak + " +" + (40 + ust.bonus) + "C");
+            this.noticeT = 2.2;
             this.shake = 10;
             for (let k = 0; k < 16; k++) {
               const a = (Math.PI * 2 * k) / 16;
@@ -3474,10 +3611,11 @@
         ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
         ctx.fillStyle = "#7a6a8a";
         const badgeN = Object.keys(Playables.badges || {}).length;
+        const ust = Playables.uncleStreak || 0;
         ctx.fillText(
           Playables.lang === "en"
-            ? "Badges " + badgeN + "/" + BADGES.length + " · Runs " + Playables.runs
-            : "実績 " + badgeN + "/" + BADGES.length + "　プレイ " + Playables.runs + " 回",
+            ? "Badges " + badgeN + "/" + BADGES.length + " · Uncle streak " + ust + " · Runs " + Playables.runs
+            : "実績 " + badgeN + "/" + BADGES.length + "　おじ連続 " + ust + "　プレイ " + Playables.runs,
           W / 2,
           H * 0.445
         );
@@ -3699,7 +3837,7 @@
       const top = H * 0.46;
       const panelW = Math.min(W * 0.92, 380);
       const rowH = Math.min(64, (H - top - 70) / 3);
-      const panelH = 48 + rowH * 3 + 8;
+      const panelH = 48 + rowH * 3 + 8 + (allDailyDone() ? rowH : 0);
 
       ctx.fillStyle = "rgba(255,255,255,0.9)";
       ctx.beginPath();
@@ -3749,6 +3887,38 @@
         ctx.font = `bold ${Math.min(11, W * 0.026)}px sans-serif`;
         ctx.fillText(
           done ? "達成 " + m.reward + "C" : prog + "/" + m.target + "  " + m.reward + "C",
+          W / 2 + panelW / 2 - 18,
+          y + 22
+        );
+      }
+
+      // 連鎖ミッション（3本クリア後）
+      if (allDailyDone()) {
+        const ch = ensureChainMission();
+        const y = top + 40 + dailyMissions.length * rowH;
+        const prog = Math.min(ch.target, ch.progress || 0);
+        const ratio = ch.target > 0 ? Math.min(1, prog / ch.target) : 0;
+        ctx.fillStyle = ch.claimed
+          ? "rgba(200,240,210,0.55)"
+          : "rgba(255,230,180,0.85)";
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(W / 2 - panelW / 2 + 10, y, panelW - 20, rowH - 8, 10);
+        else ctx.fillRect(W / 2 - panelW / 2 + 10, y, panelW - 20, rowH - 8);
+        ctx.fill();
+        ctx.fillStyle = ch.claimed ? "#4a8a5a" : "#8a5a10";
+        ctx.textAlign = "left";
+        ctx.font = `bold ${Math.min(12, W * 0.03)}px sans-serif`;
+        ctx.fillText((ch.claimed ? "✓ " : "★ ") + ch.label, W / 2 - panelW / 2 + 18, y + 20);
+        const barW = panelW - 36 - 70;
+        ctx.fillStyle = "rgba(0,0,0,0.08)";
+        ctx.fillRect(W / 2 - panelW / 2 + 18, y + 30, barW, 8);
+        ctx.fillStyle = ch.claimed ? "#7dcea0" : "#e8a020";
+        ctx.fillRect(W / 2 - panelW / 2 + 18, y + 30, barW * ratio, 8);
+        ctx.fillStyle = "#8a6a20";
+        ctx.textAlign = "right";
+        ctx.font = `bold ${Math.min(11, W * 0.026)}px sans-serif`;
+        ctx.fillText(
+          ch.claimed ? "達成 " + ch.reward + "C" : prog + "/" + ch.target + "  " + ch.reward + "C",
           W / 2 + panelW / 2 - 18,
           y + 22
         );
