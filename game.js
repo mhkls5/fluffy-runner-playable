@@ -38,7 +38,8 @@
     equipTrail: 0,
     equipCharm: 0,
     lifetimeCoins: 0,
-    ghost: null, // { score, samples: [{d,y}] }
+    ghost: null, // ベスト走行ゴースト（既定 OFF・保存のみ）
+    showGhost: false,
     savedLoaded: false,
 
     _lsKey: "fluffy-runner-save-v1",
@@ -65,6 +66,7 @@
         yesterdayBest: this.yesterdayBest,
         topScores: this.topScores,
         badges: this.badges,
+        showGhost: this.showGhost,
         ownedEquip: this.ownedEquip,
         equipHat: this.equipHat,
         equipTrail: this.equipTrail,
@@ -99,6 +101,8 @@
       if (typeof d.yesterdayBest === "number") this.yesterdayBest = d.yesterdayBest;
       if (Array.isArray(d.topScores)) this.topScores = d.topScores;
       if (d.badges) this.badges = d.badges;
+      if (typeof d.showGhost === "boolean") this.showGhost = d.showGhost;
+      else this.showGhost = false;
       if (d.ownedEquip) {
         this.ownedEquip = {
           hat: (d.ownedEquip.hat || [true, false, false, false]).slice(),
@@ -223,7 +227,7 @@
     ja: {
       title: "ふわふわランナー",
       tagline: "コイン・コンボ・ダッシュでハイスコア",
-      how: "空中でもう一押しでダッシュ / ニアミスはスロー",
+      how: "空中でもう一度で2段ジャンプ / 3回目でダッシュ",
       play: "あそぶ",
       shop: "ショップ",
       back: "もどる",
@@ -283,7 +287,7 @@
     en: {
       title: "Fluffy Runner",
       tagline: "Jump, combo & dash for a high score",
-      how: "Tap again mid-air to dash · Near-miss = slow-mo",
+      how: "Tap again to double-jump · 3rd tap dashes",
       play: "Play",
       shop: "Shop",
       back: "Back",
@@ -1173,34 +1177,34 @@
     jump() {
       if (this.state !== "playing") return;
       const p = this.player;
-      // 空中でもう一度押す & ダッシュ可能なら急降下ダッシュ
-      // （ジャンプ直後の誤タップで即ダッシュしないよう短い猶予）
-      const sinceJump = this.time - (this._lastJumpAt || -9);
-      if (!p.onGround && p.jumps >= 1 && this.dashCd <= 0 && !p.diving && sinceJump > 0.12) {
-        this.doDash();
+      // 1) まだジャンプできる → 2段ジャンプを優先
+      if (p.jumps < p.maxJumps) {
+        const boost = 1 + Playables.upJump * 0.1;
+        const jumpForce = -Math.min(780, H * 1.15) * boost * skinAbil().jump;
+        p.vy = p.jumps === 0 ? jumpForce : jumpForce * 0.85;
+        p.onGround = false;
+        p.jumps++;
+        p.squash = 1;
+        p.diving = false;
+        this._lastJumpAt = this.time;
+        beep(p.jumps === 1 ? 520 : 720, 0.07, "square", 0.035);
+        for (let i = 0; i < 6; i++) {
+          this.particles.push({
+            x: p.x + p.w / 2,
+            y: p.y + p.h,
+            vx: (Math.random() - 0.5) * 80,
+            vy: Math.random() * 40,
+            life: 0.35,
+            max: 0.35,
+            c: "#ffd0e0",
+            r: 3 + Math.random() * 3,
+          });
+        }
         return;
       }
-      if (p.jumps >= p.maxJumps) return;
-      const boost = 1 + Playables.upJump * 0.1;
-      const jumpForce = -Math.min(780, H * 1.15) * boost * skinAbil().jump;
-      p.vy = p.jumps === 0 ? jumpForce : jumpForce * 0.82;
-      p.onGround = false;
-      p.jumps++;
-      p.squash = 1;
-      p.diving = false;
-      this._lastJumpAt = this.time;
-      beep(p.jumps === 1 ? 520 : 720, 0.07, "square", 0.035);
-      for (let i = 0; i < 6; i++) {
-        this.particles.push({
-          x: p.x + p.w / 2,
-          y: p.y + p.h,
-          vx: (Math.random() - 0.5) * 80,
-          vy: Math.random() * 40,
-          life: 0.35,
-          max: 0.35,
-          c: "#ffd0e0",
-          r: 3 + Math.random() * 3,
-        });
+      // 2) ジャンプ上限後・空中のタップ → ダッシュ（意図したときだけ）
+      if (!p.onGround && !p.diving && this.dashCd <= 0) {
+        this.doDash();
       }
     },
 
@@ -2575,8 +2579,9 @@
       ctx.restore();
     },
 
-    /** ベスト走行のゴースト（後ろに薄く表示・残像と区別） */
+    /** ベスト走行のゴースト（OFF時は描かない） */
     drawGhost() {
+      if (!Playables.showGhost) return;
       const g = Playables.ghost;
       if (!g || !g.ys || !g.ys.length) return;
       const rt = this._runTime || 0;
@@ -3466,7 +3471,7 @@
         } else if (!isBest) {
           ctx.fillText(t("best") + ": " + Playables.bestScore, W / 2, H * 0.46);
         }
-        if (Playables.ghost && Playables.ghost.ys) {
+        if (Playables.ghost && Playables.ghost.ys && Playables.showGhost) {
           ctx.fillStyle = "#5a4a5a";
           ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
           ctx.fillText(
