@@ -1374,6 +1374,7 @@
       this._sawUncle = false;
       this._uncleGuaranteed = false;
       this._caughtUncle = 0;
+      this._uncleCd = 0;
       this._lastChest = 0;
       this._surviveInfo = null;
       this._ghostRec = [];
@@ -1890,7 +1891,8 @@
       const roll = Math.random();
       let type = forcedType || "cat";
       if (!forcedType) {
-        if (roll < 0.12) type = "ojisan";
+        // おじさんは稀（保証出現＋クールタイムで制御）
+        if (roll < 0.06 && (this._uncleCd || 0) <= 0) type = "ojisan";
         else if (roll < 0.3) type = "grandma";
         else if (roll < 0.48) type = "frog";
         else if (roll < 0.66) type = "chicken";
@@ -1898,6 +1900,7 @@
         else if (roll < 0.92) type = "salaryman";
         else type = "cat";
       }
+      if (type === "ojisan") this._uncleCd = 25;
       const fromLeft = Math.random() < 0.5;
       const scale = type === "ojisan" ? 1.15 : 0.85 + Math.random() * 0.25;
       // おじさんは前から来るが、高さと出現Xを毎回変える
@@ -2449,15 +2452,19 @@
 
       // ゲスト
       this.cameoTimer -= dt;
-      // スコア 150 以降で 1 回だけおじさんを保証（追跡を気づきやすく）
-      if (!this._uncleGuaranteed && this.score > 150 && this.state === "playing") {
+      if ((this._uncleCd || 0) > 0) this._uncleCd -= dt;
+      const hasUncle = this.cameos.some((c) => c.type === "ojisan");
+      // 150点で1回保証（おじさん不在・クールタイム外のみ）
+      if (!this._uncleGuaranteed && !hasUncle && this.score > 150 && this.state === "playing") {
         this._uncleGuaranteed = true;
         this.spawnCameo("ojisan");
-        this.cameoTimer = 8;
+        this.cameoTimer = 12;
       }
-      if (this.cameoTimer <= 0 && this.cameos.length < 2) {
+      // おじさん表示中は他のゲストを出さない
+      const maxCameos = hasUncle ? 0 : 2;
+      if (this.cameoTimer <= 0 && this.cameos.length < maxCameos) {
         this.spawnCameo();
-        this.cameoTimer = 6 + Math.random() * 8;
+        this.cameoTimer = 7 + Math.random() * 9;
       }
       for (let i = this.cameos.length - 1; i >= 0; i--) {
         const g = this.cameos[i];
@@ -2477,10 +2484,10 @@
         if (
           g.dropsCoins &&
           !g.caught &&
-          g.x > 20 &&
-          g.x < W - 10 &&
-          this.coins.length < 40 &&
-          Math.random() < dt * 1.2
+          g.x > 30 &&
+          g.x < W - 20 &&
+          this.coins.length < 24 &&
+          Math.random() < dt * 0.9
         ) {
           this.coins.push({
             x: g.x + (g.vx > 0 ? -10 : 10),
