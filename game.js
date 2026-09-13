@@ -2495,9 +2495,8 @@
         return 0;
       }
       const s = this.score || 0;
-      if (s >= 800) return 2;
-      if (s >= 350) return 1;
-      return 0;
+      // 450点ごとに 昼→夕→夜→昼… とループ（夜固定にならない）
+      return Math.floor(s / 450) % 3;
     },
 
     drawSky() {
@@ -3290,10 +3289,6 @@
       else if (g.type === "salaryman") this.drawSalaryman(g);
       else this.drawCat(g);
       ctx.restore();
-      if (this.noticeT > 0 && (this.notice === t("ojisan") || this.notice === t("ojisanBonus") || this.notice === "あっ、おじさんだ！！") && g.type === "ojisan") {
-        this.drawBubble(x, y - 70 * s, t("ojisan"));
-      }
-      // 追跡マーク
       if (g.chaseable && !g.caught) {
         const bounce = Math.sin(this.time * 8) * 4;
         ctx.save();
@@ -3309,6 +3304,10 @@
         ctx.textBaseline = "middle";
         ctx.fillText("!", 0, -3);
         ctx.restore();
+      }
+      // おじさん吹き出し（常に頭上）
+      if (g.type === "ojisan" && !g.caught && this.noticeT > 0) {
+        this.drawBubble(x, y - 78 * s, t("ojisan"));
       }
     },
 
@@ -3856,16 +3855,21 @@
         ctx.textAlign = "left";
       }
 
-      // 所持コイン
+      // 所持コイン（ミュートの左に固定・重ならない）
       if (this.state !== "loading") {
+        const btnR = Math.min(22, W * 0.05);
+        const muteX = W - pad - btnR;
+        const btnY = pad + btnR + 4;
+        const coinX = muteX - btnR - 14;
         ctx.save();
-        ctx.translate(W - pad - 70, pad + 10 + Math.min(40, W * 0.09));
+        ctx.translate(coinX - 52, btnY - 8);
         this.drawCoin({ x: 0, y: 0, r: 9, spin: this.time * 4 });
         ctx.fillStyle = "#6a4a10";
-        ctx.font = `bold ${Math.min(16, W * 0.036)}px sans-serif`;
-        ctx.textAlign = "left";
-        ctx.fillText(String(Playables.totalCoins), 14, 5);
+        ctx.font = `bold ${Math.min(15, W * 0.034)}px sans-serif`;
+        ctx.textAlign = "right";
+        ctx.fillText(String(Playables.totalCoins), -4, 5);
         ctx.restore();
+        ctx.textAlign = "left";
       }
 
       if (this.state === "menu") {
@@ -4027,7 +4031,7 @@
           ctx.fillText("2倍 " + Math.ceil(this.doublePts), ix, pad + 24);
         }
 
-        if (this.noticeT > 0 && this.notice && this.notice !== "あっ、おじさんだ！！") {
+        if (this.noticeT > 0 && this.notice) {
           const a = Math.min(1, this.noticeT / 0.35);
           ctx.globalAlpha = a;
           ctx.font = `bold ${Math.min(18, W * 0.042)}px sans-serif`;
