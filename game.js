@@ -1945,6 +1945,7 @@
         this.speedLines = 1;
         this.addScore(50, W / 2, H * 0.3, "+50 " + t("ojisanBonus"), "#ffd56a");
         for (let i = 0; i < 12; i++) {
+          if (this.coins.length >= 45) break;
           this.coins.push({
             x: W + 20 + Math.random() * 120 + i * 22,
             y: this.groundY - 40 - Math.random() * 140,
@@ -2049,6 +2050,7 @@
         this.notice = Playables.lang === "en" ? "CHEST! Coins incoming" : "宝箱！ コインが降る";
         this.noticeT = 1.6;
         for (let i = 0; i < 8; i++) {
+          if (this.coins.length >= 50) break;
           this.coins.push({
             x: W + 30 + i * 28,
             y: this.groundY - 50 - (i % 4) * 28,
@@ -2092,8 +2094,8 @@
       }
       if (this.magnet > 0) this.magnet -= dt;
       if (this.doublePts > 0) this.doublePts -= dt;
-      // フィーバー中は自動マグネット
-      if (this.feverActive) this.magnet = Math.max(this.magnet, 0.5);
+      // フィーバー中は自動マグネット（短め）
+      if (this.feverActive) this.magnet = Math.max(this.magnet, 0.25);
       // ニアミス連鎖タイマー
       if (this.nearChainT > 0) {
         this.nearChainT -= dt;
@@ -2166,6 +2168,7 @@
         this.noticeT = 1.6;
         beep(330, 0.1, "sawtooth", 0.04);
         for (let i = 0; i < 10; i++) {
+          if (this.coins.length >= 50) break;
           this.coins.push({
             x: W + 40 + i * 30,
             y: this.groundY - 50 - (i % 3) * 36,
@@ -2225,7 +2228,7 @@
           passed: false,
           nearDone: false,
         });
-        if (Math.random() < 0.75) {
+        if (Math.random() < 0.75 && this.coins.length < 35) {
           const n = 3 + Math.floor(Math.random() * 4);
           const arc = Math.random() < 0.5;
           const baseY = this.groundY - (arc ? 95 : 55) - Math.random() * 40;
@@ -2470,7 +2473,15 @@
         g.x += g.vx * gdt;
         g.bob += dt * g.bobSpeed;
         g.frame += dt * 10;
-        if (g.dropsCoins && Math.random() < dt * 2.2) {
+        // コインこぼし: 画面内のみ・上限あり・捕獲後は停止
+        if (
+          g.dropsCoins &&
+          !g.caught &&
+          g.x > 20 &&
+          g.x < W - 10 &&
+          this.coins.length < 40 &&
+          Math.random() < dt * 1.2
+        ) {
           this.coins.push({
             x: g.x + (g.vx > 0 ? -10 : 10),
             y: g.y - 20 - Math.random() * 30,
