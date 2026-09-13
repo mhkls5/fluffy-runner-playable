@@ -4036,12 +4036,12 @@
           "#b8a9d4",
           true
         );
-        // 以降は how ボタンの下から積む（重なり防止）
-        this._menuStackY = howY + 26;
 
-        // 今日のチャレンジ（その下）
+        // 今日のチャレンジ（how の下）
         const tb = Playables.todayBest || 0;
         const yb = Playables.yesterdayBest || 0;
+        const stat1Y = howY + 44;
+        const stat2Y = howY + 64;
         ctx.fillStyle = "#4a3a5a";
         ctx.font = `bold ${Math.min(13, W * 0.03)}px sans-serif`;
         if (yb > 0 && tb < yb) {
@@ -4051,7 +4051,7 @@
               ? "Today: " + tb + " · Beat yesterday " + yb + "!"
               : "今日 " + tb + " / 昨日 " + yb + " を越えよう！",
             W / 2,
-            howY + 40
+            stat1Y
           );
         } else {
           ctx.fillText(
@@ -4059,7 +4059,7 @@
               ? "Today best " + tb + " · All-time " + Playables.bestScore
               : "今日のベスト " + tb + "　通算 " + Playables.bestScore,
             W / 2,
-            howY + 40
+            stat1Y
           );
         }
         ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
@@ -4071,8 +4071,11 @@
             ? "Badges " + badgeN + "/" + BADGES.length + " · Uncle streak " + ust + " · Runs " + Playables.runs
             : "実績 " + badgeN + "/" + BADGES.length + "　おじ連続 " + ust + "　プレイ " + Playables.runs,
           W / 2,
-          howY + 60
+          stat2Y
         );
+
+        // 統計の下から積む（文字を隠さない）
+        this._menuStackY = stat2Y + 14;
 
         this.drawNextGoal();
         this.drawMissionPanel();
