@@ -1701,7 +1701,8 @@
         checkBadges(this);
         this._overCount++;
         if (this._overCount % 3 === 0) {
-          await Playables.showInterstitial();
+          // 待たせない（広告待ちで画面が固まるのを防ぐ）
+          Playables.showInterstitial().catch(() => {});
         }
       } catch (e) {
         console.warn("gameOver post-process", e);
