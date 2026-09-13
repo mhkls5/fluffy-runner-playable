@@ -2483,46 +2483,128 @@
     },
 
     // ---------- draw ----------
+    /** 昼(0) → 夕(1) → 夜(2)。スコアで移り変わる */
+    skyPhase() {
+      if (this.state === "menu" || this.state === "shop" || this.state === "loading") {
+        // メニューは実時間で雰囲気を変える
+        const h = new Date().getHours();
+        if (h >= 18 || h < 5) return 2;
+        if (h >= 16) return 1;
+        return 0;
+      }
+      const s = this.score || 0;
+      if (s >= 800) return 2;
+      if (s >= 350) return 1;
+      return 0;
+    },
+
+    drawSky() {
+      const phase = this.skyPhase();
+      const fever = this.feverActive;
+      const sky = ctx.createLinearGradient(0, 0, 0, H);
+      if (fever) {
+        sky.addColorStop(0, phase === 2 ? "#5a2060" : "#ffd0f0");
+        sky.addColorStop(0.5, phase === 2 ? "#a04060" : "#ffe0a0");
+        sky.addColorStop(1, phase === 2 ? "#402050" : "#ffb8d0");
+      } else if (phase === 0) {
+        sky.addColorStop(0, "#b8e0ff");
+        sky.addColorStop(0.45, "#ffd6ec");
+        sky.addColorStop(1, "#ffe8c8");
+      } else if (phase === 1) {
+        sky.addColorStop(0, "#7a6acd");
+        sky.addColorStop(0.45, "#ff9a6a");
+        sky.addColorStop(1, "#ffd0a0");
+      } else {
+        sky.addColorStop(0, "#1a1840");
+        sky.addColorStop(0.55, "#3a2860");
+        sky.addColorStop(1, "#6a3a70");
+      }
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, W, H);
+
+      // 星（夜）
+      if (phase === 2) {
+        ctx.fillStyle = "rgba(255,255,220,0.85)";
+        for (let i = 0; i < 18; i++) {
+          const sx = ((i * 97 + 13) % 100) / 100 * W;
+          const sy = ((i * 53 + 7) % 55) / 100 * H;
+          const tw = 0.5 + 0.5 * Math.sin(this.time * 2 + i);
+          ctx.globalAlpha = 0.35 + tw * 0.5;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 1.2 + (i % 3) * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // 太陽 / 夕日 / 月
+      const bx = W * 0.82;
+      const by = H * 0.18;
+      const br = Math.min(W, H) * 0.07;
+      if (phase === 0) {
+        ctx.fillStyle = "rgba(255,240,180,0.9)";
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.25)";
+        ctx.beginPath();
+        ctx.arc(bx, by, br * 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (phase === 1) {
+        ctx.fillStyle = "rgba(255,160,80,0.95)";
+        ctx.beginPath();
+        ctx.arc(bx, H * 0.42, br * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,200,100,0.3)";
+        ctx.beginPath();
+        ctx.arc(bx, H * 0.42, br * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // 月
+        ctx.fillStyle = "rgba(255,250,220,0.95)";
+        ctx.beginPath();
+        ctx.arc(bx, by, br * 0.9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(26,24,64,0.9)";
+        ctx.beginPath();
+        ctx.arc(bx + br * 0.35, by - br * 0.15, br * 0.75, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    },
+
     draw() {
       ctx.save();
       if (this.shake > 0) {
         ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
       }
 
-      const sky = ctx.createLinearGradient(0, 0, 0, H);
-      if (this.feverActive) {
-        sky.addColorStop(0, "#ffd0f0");
-        sky.addColorStop(0.5, "#ffe0a0");
-        sky.addColorStop(1, "#ffb8d0");
-      } else {
-        sky.addColorStop(0, "#b8e0ff");
-        sky.addColorStop(0.45, "#ffd6ec");
-        sky.addColorStop(1, "#ffe8c8");
-      }
-      ctx.fillStyle = sky;
-      ctx.fillRect(0, 0, W, H);
+      this.drawSky();
 
-      ctx.fillStyle = "rgba(255,240,180,0.9)";
-      ctx.beginPath();
-      ctx.arc(W * 0.82, H * 0.18, Math.min(W, H) * 0.07, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.25)";
-      ctx.beginPath();
-      ctx.arc(W * 0.82, H * 0.18, Math.min(W, H) * 0.1, 0, Math.PI * 2);
-      ctx.fill();
-
-      for (const c of this.clouds) this.drawCloud(c.x, c.y, c.s);
-      this.drawHills(true);
-      this.drawHills(false);
+      const phase = this.skyPhase();
+      for (const c of this.clouds) this.drawCloud(c.x, c.y, c.s, phase);
+      this.drawHills(true, phase);
+      this.drawHills(false, phase);
       for (const g of this.cameos) this.drawCameo(g);
 
       // 地面
       const gy = this.groundY;
-      ctx.fillStyle = this.feverActive ? "#b8f0c8" : "#a8e6c8";
+      let groundA = "#a8e6c8";
+      let groundB = "#7dcfad";
+      if (this.feverActive) {
+        groundA = "#b8f0c8";
+        groundB = "#7dcfad";
+      } else if (phase === 1) {
+        groundA = "#8ec8a8";
+        groundB = "#5aaa88";
+      } else if (phase === 2) {
+        groundA = "#3a6a58";
+        groundB = "#2a4a40";
+      }
+      ctx.fillStyle = groundA;
       ctx.fillRect(0, gy, W, H - gy);
-      ctx.fillStyle = "#7dcfad";
+      ctx.fillStyle = groundB;
       ctx.fillRect(0, gy, W, 8);
-      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.fillStyle = phase === 2 ? "rgba(255,255,200,0.12)" : "rgba(255,255,255,0.18)";
       const stripe = 48;
       const off = this.worldOffset % stripe;
       for (let x = -stripe; x < W + stripe; x += stripe) {
@@ -2608,8 +2690,14 @@
       ctx.restore();
     },
 
-    drawCloud(x, y, s) {
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
+    drawCloud(x, y, s, phase) {
+      const night = phase === 2;
+      const dusk = phase === 1;
+      ctx.fillStyle = night
+        ? "rgba(180,170,210,0.55)"
+        : dusk
+          ? "rgba(255,200,190,0.75)"
+          : "rgba(255,255,255,0.85)";
       const r = 22 * s;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -2619,9 +2707,15 @@
       ctx.fill();
     },
 
-    drawHills(far) {
+    drawHills(far, phase) {
       const layer = far ? 0 : 1;
-      ctx.fillStyle = far ? "#c8f0e0" : "#9adfc0";
+      if (phase === 2) {
+        ctx.fillStyle = far ? "#2a3a50" : "#3a5a48";
+      } else if (phase === 1) {
+        ctx.fillStyle = far ? "#8a7aaa" : "#5aaa88";
+      } else {
+        ctx.fillStyle = far ? "#c8f0e0" : "#9adfc0";
+      }
       for (const h of this.hills) {
         if (h.layer !== layer) continue;
         const speed = far ? 0.15 : 0.35;
