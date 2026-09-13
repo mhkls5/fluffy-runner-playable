@@ -2504,17 +2504,16 @@
     },
 
     // ---------- draw ----------
-    /** 昼(0) → 夕(1) → 夜(2)。長めの区間＋なめらか移行（目が疲れない） */
+    /** 昼(0) → 夕(1) → 夜(2)。超長区間＋長いブレンド（チカチカ防止） */
     skyPhase() {
       if (this.state === "menu" || this.state === "shop" || this.state === "loading") {
         const h = new Date().getHours();
-        if (h >= 19 || h < 5) return 2;
-        if (h >= 17) return 1;
+        if (h >= 20 || h < 5) return 2;
+        if (h >= 18) return 1;
         return 0;
       }
       const s = this.score || 0;
-      // 900点ごと・1周 2700。早切り替えしない
-      return Math.floor(s / 900) % 3;
+      return Math.floor(s / 1600) % 3;
     },
 
     /** 0..2 の連続値（フェード用） */
@@ -2523,14 +2522,16 @@
         return this.skyPhase();
       }
       const s = this.score || 0;
-      const seg = 900;
+      const seg = 1600;
       const idx = Math.floor(s / seg) % 3;
       const t = (s % seg) / seg;
-      // 最後の 15% で次フェーズへブレンド
-      const blendFrom = 0.85;
+      // 区間の後半 50% かけてゆっくり移行
+      const blendFrom = 0.5;
       if (t < blendFrom) return idx;
       const k = (t - blendFrom) / (1 - blendFrom);
-      return idx + k;
+      // イージング（ゆっくり始まってゆっくり終わる）
+      const e = k * k * (3 - 2 * k);
+      return idx + e;
     },
 
     mixHex(a, b, t) {
@@ -2543,10 +2544,10 @@
     },
 
     skyColors() {
-      // コントラストを抑えめに（目疲れ対策）
-      const day = ["#c5e4ff", "#ffdcec", "#ffeecf"];
-      const dusk = ["#8a7ad0", "#f0a078", "#ffd8b0"];
-      const night = ["#2a2850", "#4a3870", "#7a4a80"];
+      // 明暗差を抑えたパステル（チカチカ・目疲れ対策）
+      const day = ["#c8e6ff", "#ffdcec", "#fff0d8"];
+      const dusk = ["#b8a8d8", "#f0b898", "#ffe0c0"];
+      const night = ["#7a78a8", "#9a88b0", "#b890b0"];
       const ph = this.skyPhaseF();
       if (ph <= 0) return day;
       if (ph >= 2) return night;
@@ -2585,16 +2586,15 @@
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, W, H);
 
-      // 星（夜成分に応じてフェードイン）
+      // 星は夜でもごく薄く
       if (nightAmt > 0.05) {
-        ctx.fillStyle = "rgba(255,255,220,0.85)";
-        for (let i = 0; i < 16; i++) {
+        ctx.fillStyle = "rgba(255,255,220,0.5)";
+        for (let i = 0; i < 10; i++) {
           const sx = (((i * 97 + 13) % 100) / 100) * W;
           const sy = (((i * 53 + 7) % 55) / 100) * H;
-          const tw = 0.5 + 0.5 * Math.sin(this.time * 1.5 + i);
-          ctx.globalAlpha = nightAmt * (0.25 + tw * 0.4);
+          ctx.globalAlpha = nightAmt * 0.25;
           ctx.beginPath();
-          ctx.arc(sx, sy, 1.1 + (i % 3) * 0.3, 0, Math.PI * 2);
+          ctx.arc(sx, sy, 1, 0, Math.PI * 2);
           ctx.fill();
         }
         ctx.globalAlpha = 1;
