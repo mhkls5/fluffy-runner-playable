@@ -3694,12 +3694,13 @@
     },
 
     langSegLayout() {
-      const segH = 32;
-      const segW = Math.min(88, W * 0.2);
-      const totalW = segW * 2 + 6;
-      const sx = W / 2 - totalW / 2;
-      // ショップではタイトルに被るので下へ
-      const sy = this.state === "shop" ? Math.max(80, H - 110) : 12;
+      // ヒット作定石: 中央に置かない（タイトル/パネルと被る）
+      // 左上にコンパクトな 2 連（メニュー / ショップ共通）
+      const segH = 30;
+      const segW = Math.min(64, W * 0.15);
+      const totalW = segW * 2 + 4;
+      const sx = Math.min(16, W * 0.04);
+      const sy = 12;
       return { segH, segW, totalW, sx, sy };
     },
 
@@ -3722,7 +3723,7 @@
       ctx.textBaseline = "middle";
       ctx.fillText("日本語", sx + segW / 2, sy + segH / 2 + 1);
       // English
-      const ex = sx + segW + 6;
+      const ex = sx + segW + 4;
       ctx.fillStyle = !isJa ? "#6bb6ff" : "rgba(255,255,255,0.92)";
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(ex, sy, segW, segH, 10);
@@ -3730,7 +3731,7 @@
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = !isJa ? "#fff" : "#5a4a5a";
-      ctx.fillText("English", ex + segW / 2, sy + segH / 2 + 1);
+      ctx.fillText("EN", ex + segW / 2, sy + segH / 2 + 1);
       ctx.textBaseline = "alphabetic";
       ctx.textAlign = "left";
     },
@@ -4187,8 +4188,9 @@
       ctx.font = `bold ${Math.min(15, W * 0.035)}px sans-serif`;
       ctx.fillText(t("skins"), W / 2, 96);
 
-      const skinY = 120;
-      const skinW = Math.min(70, (W - pad * 2) / 5);
+      const skinY = 108;
+      const skinW = Math.min(68, (W - pad * 2) / 5);
+      const skinH = 68;
       for (let i = 0; i < SKINS.length; i++) {
         const s = SKINS[i];
         const x = pad + skinW * i + skinW / 2;
@@ -4196,8 +4198,8 @@
         const selected = Playables.skin === i;
         ctx.fillStyle = selected ? "#ffe0ec" : "rgba(255,220,230,0.5)";
         ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(x - skinW / 2 + 4, skinY, skinW - 8, 78, 12);
-        else ctx.fillRect(x - skinW / 2 + 4, skinY, skinW - 8, 78);
+        if (ctx.roundRect) ctx.roundRect(x - skinW / 2 + 4, skinY, skinW - 8, skinH, 12);
+        else ctx.fillRect(x - skinW / 2 + 4, skinY, skinW - 8, skinH);
         ctx.fill();
         if (selected) {
           ctx.strokeStyle = "#ff8fb8";
@@ -4205,43 +4207,56 @@
           ctx.stroke();
         }
         ctx.save();
-        ctx.translate(x, skinY + 32);
+        ctx.translate(x, skinY + 28);
         const g = ctx.createRadialGradient(-4, -6, 2, 0, 0, 18);
         g.addColorStop(0, s.body[0]);
         g.addColorStop(0.5, s.body[1]);
         g.addColorStop(1, s.body[2]);
         ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.arc(0, 0, 16, 0, Math.PI * 2);
+        ctx.arc(0, 0, 14, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = "#4a3a5a";
         ctx.beginPath();
-        ctx.arc(-5, -2, 2, 0, Math.PI * 2);
-        ctx.arc(5, -2, 2, 0, Math.PI * 2);
+        ctx.arc(-4, -2, 1.8, 0, Math.PI * 2);
+        ctx.arc(4, -2, 1.8, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
         ctx.fillStyle = "#5a4a6a";
-        ctx.font = `${Math.min(10, skinW * 0.14)}px sans-serif`;
-        ctx.fillText(s.name, x, skinY + 60);
+        ctx.font = `${Math.min(9, skinW * 0.13)}px sans-serif`;
+        ctx.fillText(s.name, x, skinY + 50);
         if (owned) {
           ctx.fillStyle = selected ? "#e05080" : "#5a4a5a";
-          ctx.fillText(selected ? t("wearing") : t("owned"), x, skinY + 74);
+          ctx.fillText(selected ? t("wearing") : t("owned"), x, skinY + 62);
         } else {
           ctx.fillStyle = Playables.totalCoins >= s.cost ? "#c07000" : "#999";
-          ctx.fillText(s.cost + "C", x, skinY + 74);
+          ctx.fillText(s.cost + "C", x, skinY + 62);
         }
       }
 
-      // --- 中央プレビュー ---
+      // --- 中央プレビュー（スキン行と重ならないよう十分あける） ---
       const focusIdx = this.shopFocus >= 0 ? this.shopFocus : Playables.skin;
       const fs0 = SKINS[focusIdx] || SKINS[0];
-      const prevY = 230;
-      ctx.fillStyle = "rgba(255,230,240,0.45)";
+      const prevY = 268;
+      const prevW = Math.min(W * 0.78, 280);
+      const prevH = 120;
+      ctx.fillStyle = "rgba(255,230,240,0.55)";
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(W / 2 - Math.min(W * 0.42, 150), prevY - 70, Math.min(W * 0.84, 300), 140, 20);
-      else ctx.fillRect(W / 2 - 150, prevY - 70, 300, 140);
+      if (ctx.roundRect) ctx.roundRect(W / 2 - prevW / 2, prevY - prevH / 2, prevW, prevH, 18);
+      else ctx.fillRect(W / 2 - prevW / 2, prevY - prevH / 2, prevW, prevH);
       ctx.fill();
-      this.drawPreviewBlob(W / 2, prevY, 1.15);
+      ctx.strokeStyle = "rgba(255,180,200,0.45)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // オーラが枠からはみ出ないようにクリップ
+      ctx.save();
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(W / 2 - prevW / 2, prevY - prevH / 2, prevW, prevH, 18);
+        ctx.clip();
+      }
+      this.drawPreviewBlob(W / 2, prevY, 0.95);
+      ctx.restore();
       ctx.fillStyle = "#3a2a4a";
       ctx.textAlign = "center";
       ctx.font = `bold ${Math.min(16, W * 0.038)}px sans-serif`;
@@ -4467,12 +4482,12 @@
     // 言語セグメント（最前面）
     if (Game.state === "menu" || Game.state === "shop") {
       const { segH, segW, totalW, sx, sy } = Game.langSegLayout();
-      if (pt.y >= sy - 6 && pt.y <= sy + segH + 6) {
-        if (pt.x >= sx - 6 && pt.x <= sx + segW + 6) {
+      if (pt.y >= sy - 8 && pt.y <= sy + segH + 8) {
+        if (pt.x >= sx - 8 && pt.x <= sx + segW + 2) {
           Game.setLang("ja");
           return;
         }
-        if (pt.x >= sx + segW + 2 && pt.x <= sx + totalW + 6) {
+        if (pt.x >= sx + segW + 2 && pt.x <= sx + totalW + 8) {
           Game.setLang("en");
           return;
         }
@@ -4505,9 +4520,9 @@
 
     if (Game.state === "shop") {
       const pad = 16;
-      const skinW = Math.min(70, (W - pad * 2) / 5);
+      const skinW = Math.min(68, (W - pad * 2) / 5);
       // スキン行
-      if (pt.y > 120 && pt.y < 200) {
+      if (pt.y > 108 && pt.y < 178) {
         for (let i = 0; i < SKINS.length; i++) {
           const x = pad + skinW * i + skinW / 2;
           if (Math.abs(pt.x - x) < skinW / 2) {
