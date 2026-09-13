@@ -36,6 +36,7 @@
     chainMission: null, // { type, target, reward, claimed, date }
     uncleStreak: 0,
     uncleStreakDate: "",
+    surviveStreak: 0, // 300点到達が続く回数
     bestBonusDate: "",
     bestBonusClaimed: false,
     tutorialSeen: false,
@@ -78,6 +79,7 @@
         chainMission: this.chainMission,
         uncleStreak: this.uncleStreak,
         uncleStreakDate: this.uncleStreakDate,
+        surviveStreak: this.surviveStreak,
         bestBonusDate: this.bestBonusDate,
         bestBonusClaimed: this.bestBonusClaimed,
         tutorialSeen: this.tutorialSeen,
@@ -122,6 +124,7 @@
       if (d.chainMission) this.chainMission = d.chainMission;
       if (typeof d.uncleStreak === "number") this.uncleStreak = d.uncleStreak;
       if (typeof d.uncleStreakDate === "string") this.uncleStreakDate = d.uncleStreakDate;
+      if (typeof d.surviveStreak === "number") this.surviveStreak = d.surviveStreak;
       if (typeof d.bestBonusDate === "string") this.bestBonusDate = d.bestBonusDate;
       if (typeof d.bestBonusClaimed === "boolean") this.bestBonusClaimed = d.bestBonusClaimed;
       if (typeof d.tutorialSeen === "boolean") this.tutorialSeen = d.tutorialSeen;
@@ -631,6 +634,48 @@
     Playables.totalCoins += bonus;
     Playables.persist();
     return { streak, bonus };
+  }
+
+  /** 今いちばん近い「次に買うもの」 */
+  function nextUnlockGoal() {
+    const have = Playables.totalCoins || 0;
+    const cands = [];
+    for (let i = 0; i < SKINS.length; i++) {
+      if (!Playables.owned[i]) cands.push({ cost: SKINS[i].cost, label: (Playables.lang === "en" ? SKINS[i].nameEn : SKINS[i].name), kind: "skin" });
+    }
+    const eqs = [
+      { list: EQUIP_HAT, owned: Playables.ownedEquip.hat, label: Playables.lang === "en" ? "Hat" : "ぼうし" },
+      { list: EQUIP_TRAIL, owned: Playables.ownedEquip.trail, label: Playables.lang === "en" ? "Trail" : "エフェクト" },
+      { list: EQUIP_CHARM, owned: Playables.ownedEquip.charm, label: Playables.lang === "en" ? "Charm" : "おまもり" },
+    ];
+    for (const e of eqs) {
+      for (let i = 1; i < e.list.length; i++) {
+        if (!e.owned || !e.owned[i]) {
+          cands.push({ cost: e.list[i].cost, label: (Playables.lang === "en" ? e.list[i].en : e.list[i].ja), kind: "eq" });
+        }
+      }
+    }
+    const upCosts = [30, 80, 160, 300];
+    if (Playables.upJump < 3) cands.push({ cost: upCosts[Playables.upJump], label: t("jumpPow") + " LV" + (Playables.upJump + 1), kind: "up" });
+    if (Playables.upCoin < 3) cands.push({ cost: upCosts[Playables.upCoin], label: t("coinVal") + " LV" + (Playables.upCoin + 1), kind: "up" });
+    if (Playables.upStart < 3) cands.push({ cost: upCosts[Playables.upStart], label: t("startSpd") + " LV" + (Playables.upStart + 1), kind: "up" });
+    if (!cands.length) return null;
+    cands.sort((a, b) => a.cost - b.cost);
+    const g = cands[0];
+    return { ...g, need: Math.max(0, g.cost - have), have };
+  }
+
+  function noteSurvive(score) {
+    if (score >= 300) {
+      Playables.surviveStreak = (Playables.surviveStreak || 0) + 1;
+      const bonus = Math.min(80, Playables.surviveStreak * 15);
+      Playables.totalCoins += bonus;
+      Playables.persist();
+      return { streak: Playables.surviveStreak, bonus };
+    }
+    Playables.surviveStreak = 0;
+    Playables.persist();
+    return null;
   }
 
   function remainingDaysHint() {
@@ -1329,6 +1374,8 @@
       this._sawUncle = false;
       this._uncleGuaranteed = false;
       this._caughtUncle = 0;
+      this._lastChest = 0;
+      this._surviveInfo = null;
       this._ghostRec = [];
       this._ghostAcc = 0;
       this._runTime = 0;
@@ -1610,6 +1657,8 @@
       const rec = recordScore(final);
       this._todayNew = rec.todayNew;
       this._rank = rec.rank;
+      const sv = noteSurvive(final);
+      this._surviveInfo = sv;
       const gained = Math.floor(this.coinCount * (1 + Playables.upCoin * 0.15) * equipAbil().coin);
       if (this.coinCount > 0) gainSkinXp(Math.floor(this.coinCount * 0.25));
       this._runCoinGain = gained;
@@ -1992,6 +2041,26 @@
       this.speed = Math.min(this.speed, this.baseSpeed * maxMul);
       if (this.dash > 0) this.speed *= 1.35;
       this.worldOffset += this.speed * gdt;
+
+      // 宝箱（1000点ごと）: コイン束をばらまく
+      const chest = Math.floor(this.score / 1000);
+      if (chest > (this._lastChest || 0)) {
+        this._lastChest = chest;
+        this.notice = Playables.lang === "en" ? "CHEST! Coins incoming" : "宝箱！ コインが降る";
+        this.noticeT = 1.6;
+        for (let i = 0; i < 8; i++) {
+          this.coins.push({
+            x: W + 30 + i * 28,
+            y: this.groundY - 50 - (i % 4) * 28,
+            r: 13,
+            spin: Math.random() * 6,
+            got: false,
+          });
+        }
+        beep(660, 0.08, "triangle", 0.045);
+        setTimeout(() => beep(880, 0.1, "triangle", 0.04), 90);
+        setTimeout(() => beep(1175, 0.12, "triangle", 0.04), 180);
+      }
 
       // マイルストーン
       const ms = Math.floor(this.score / 250);
@@ -4005,6 +4074,7 @@
 
         this.drawMissionPanel();
         this.drawTopScores();
+        this.drawNextGoal();
       }
 
       if (this.state === "shop") {
@@ -4194,6 +4264,17 @@
             H * 0.5
           );
         }
+        if (this._surviveInfo && this._surviveInfo.streak >= 2) {
+          ctx.fillStyle = "#c07000";
+          ctx.font = `bold ${Math.min(13, W * 0.03)}px sans-serif`;
+          ctx.fillText(
+            Playables.lang === "en"
+              ? "Survive streak x" + this._surviveInfo.streak + " +" + this._surviveInfo.bonus + "C"
+              : "生存連続 x" + this._surviveInfo.streak + "　+" + this._surviveInfo.bonus + "C",
+            W / 2,
+            H * 0.525
+          );
+        }
 
         this.drawButton(W / 2 - 72, H * 0.56, 128, 48, t("again"), "#ff8fb8");
         this.drawButton(W / 2 + 72, H * 0.56, 128, 48, t("continueAd"), "#7ec8e8", true);
@@ -4211,6 +4292,41 @@
         ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
         ctx.fillText(t("continueHint"), W / 2, H * 0.72);
         this.drawButton(W / 2, H * 0.77, 140, 38, t("shopGo"), "#b8a9d4", true);
+      }
+    },
+
+    drawNextGoal() {
+      const g = nextUnlockGoal();
+      if (!g) return;
+      const pad = Math.min(16, W * 0.04);
+      const top = Math.min(H * 0.72, H - 150);
+      const w = Math.min(W * 0.92, 360);
+      const h = 44;
+      ctx.fillStyle = "rgba(255,240,200,0.9)";
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(W / 2 - w / 2, top, w, h, 12);
+      else ctx.fillRect(W / 2 - w / 2, top, w, h);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(230,180,80,0.7)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = "#6a4a10";
+      ctx.textAlign = "center";
+      ctx.font = `bold ${Math.min(13, W * 0.032)}px sans-serif`;
+      if (g.need <= 0) {
+        ctx.fillText(
+          Playables.lang === "en" ? "Ready: " + g.label + " !" : "買えるよ: " + g.label + " ！",
+          W / 2,
+          top + 26
+        );
+      } else {
+        ctx.fillText(
+          Playables.lang === "en"
+            ? "Next: " + g.label + " · need " + g.need + "C"
+            : "つぎの目標: " + g.label + "　あと " + g.need + "C",
+          W / 2,
+          top + 26
+        );
       }
     },
 
