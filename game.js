@@ -3581,25 +3581,26 @@
       else if (g.type === "salaryman") this.drawSalaryman(g);
       else this.drawCat(g);
       ctx.restore();
+      // 「！」は一番上、吹き出しはその下（重ならない）
       if (g.chaseable && !g.caught) {
-        const bounce = Math.sin(this.time * 8) * 4;
+        const bounce = Math.sin(this.time * 8) * 3;
         ctx.save();
-        ctx.translate(x, y - 95 * s + bounce);
+        ctx.translate(x + 28 * s, y - 118 * s + bounce);
         ctx.fillStyle = "#ff5050";
         ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(-16, -18, 32, 28, 8);
-        else ctx.fillRect(-16, -18, 32, 28);
+        if (ctx.roundRect) ctx.roundRect(-14, -16, 28, 26, 8);
+        else ctx.fillRect(-14, -16, 28, 26);
         ctx.fill();
         ctx.fillStyle = "#fff";
-        ctx.font = "bold 20px sans-serif";
+        ctx.font = "bold 18px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText("!", 0, -3);
+        ctx.fillText("!", 0, -2);
         ctx.restore();
       }
-      // おじさん吹き出し（常に頭上）
+      // 吹き出しは頭上・「！」の下
       if (g.type === "ojisan" && !g.caught && this.noticeT > 0) {
-        this.drawBubble(x, y - 78 * s, t("ojisan"));
+        this.drawBubble(x, y - 72 * s, t("ojisan"));
       }
     },
 
@@ -4329,7 +4330,8 @@
           ctx.fillText("2倍 " + Math.ceil(this.doublePts), ix, pad + 24);
         }
 
-        if (this.noticeT > 0 && this.notice) {
+        // おじさんトーストは出さない（頭上吹き出しで足りる）
+        if (this.noticeT > 0 && this.notice && this.notice !== t("ojisan") && this.notice !== "あっ、おじさんだ！！" && this.notice !== "It's the uncle!!") {
           const a = Math.min(1, this.noticeT / 0.35);
           ctx.globalAlpha = a;
           ctx.font = `bold ${Math.min(18, W * 0.042)}px sans-serif`;
