@@ -3698,7 +3698,8 @@
       const segW = Math.min(88, W * 0.2);
       const totalW = segW * 2 + 6;
       const sx = W / 2 - totalW / 2;
-      const sy = 12;
+      // ショップではタイトルに被るので下へ
+      const sy = this.state === "shop" ? Math.max(80, H - 110) : 12;
       return { segH, segW, totalW, sx, sy };
     },
 
@@ -4170,15 +4171,15 @@
       const pad = 16;
       ctx.fillStyle = "rgba(255,255,255,0.94)";
       ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = "#5a4a6a";
+      ctx.fillStyle = "#3a2a4a";
       ctx.textAlign = "center";
       ctx.font = `bold ${Math.min(24, W * 0.055)}px sans-serif`;
-      ctx.fillText(t("shop"), W / 2, 40);
-      this.drawCoin({ x: W / 2 - 30, y: 56, r: 9, spin: this.time * 4 });
+      ctx.fillText(t("shop"), W / 2, 48);
+      this.drawCoin({ x: W / 2 - 30, y: 68, r: 9, spin: this.time * 4 });
       ctx.fillStyle = "#8a6a20";
       ctx.font = `bold ${Math.min(16, W * 0.036)}px sans-serif`;
       ctx.textAlign = "left";
-      ctx.fillText(String(Playables.totalCoins), W / 2 - 16, 61);
+      ctx.fillText(String(Playables.totalCoins), W / 2 - 16, 73);
 
       // スキン
       ctx.textAlign = "center";
