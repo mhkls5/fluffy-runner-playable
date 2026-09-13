@@ -1532,6 +1532,7 @@
           this.feverActive = true;
           this.fever = 1;
           this.megaFever = false;
+          this.magnet = Math.max(this.magnet, 1.2);
           bumpMission("fever", 1);
           Music.setMode("fever");
           this.notice = t("fever");
@@ -1942,13 +1943,12 @@
         this._sawUncle = true;
         this.notice = Playables.lang === "en" ? "It's the uncle!!" : "あっ、おじさんだ！！";
         this.noticeT = 2.4;
-        this.magnet = Math.max(this.magnet, 6);
-        // シールドは付けない（無料盾が多すぎると死ななくなる）
+        // マグネットは付けない（コインが一気に寄って無限に見える原因）
         this.shake = Math.max(this.shake, 5);
         this.speedLines = 1;
         this.addScore(50, W / 2, H * 0.3, "+50 " + t("ojisanBonus"), "#ffd56a");
-        for (let i = 0; i < 12; i++) {
-          if (this.coins.length >= 45) break;
+        for (let i = 0; i < 8; i++) {
+          if (this.coins.length >= 28) break;
           this.coins.push({
             x: W + 20 + Math.random() * 120 + i * 22,
             y: this.groundY - 40 - Math.random() * 140,
@@ -2097,8 +2097,7 @@
       }
       if (this.magnet > 0) this.magnet -= dt;
       if (this.doublePts > 0) this.doublePts -= dt;
-      // フィーバー中は自動マグネット（短め）
-      if (this.feverActive) this.magnet = Math.max(this.magnet, 0.25);
+      // フィーバー開始時に一度だけ短いマグネット（毎フレーム延長しない）
       // ニアミス連鎖タイマー
       if (this.nearChainT > 0) {
         this.nearChainT -= dt;
@@ -2518,7 +2517,7 @@
             const ust = noteUncleCaught();
             this.addScore(80, g.x, g.y - 50, "CAPTURE +80", "#ffd56a");
             Playables.totalCoins += 40;
-            this.magnet = Math.max(this.magnet, 4);
+            // マグネットは付けない（捕獲直後にコインが暴れ出す原因）
             this.fever = Math.min(1, (this.fever || 0) + 0.35);
             this.notice =
               (Playables.lang === "en"
@@ -2544,6 +2543,9 @@
             setTimeout(() => beep(784, 0.1, "triangle", 0.05), 160);
             setTimeout(() => beep(1046, 0.16, "triangle", 0.045), 240);
             Playables.persist();
+            // 捕獲したら即座に消す（残ると演出が続く）
+            this.cameos.splice(i, 1);
+            continue;
           }
         }
         if (g.x < -120 || g.x > W + 120) this.cameos.splice(i, 1);
