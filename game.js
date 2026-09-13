@@ -2485,54 +2485,97 @@
     },
 
     // ---------- draw ----------
-    /** 昼(0) → 夕(1) → 夜(2)。スコアで移り変わる */
+    /** 昼(0) → 夕(1) → 夜(2)。長めの区間＋なめらか移行（目が疲れない） */
     skyPhase() {
       if (this.state === "menu" || this.state === "shop" || this.state === "loading") {
-        // メニューは実時間で雰囲気を変える
         const h = new Date().getHours();
-        if (h >= 18 || h < 5) return 2;
-        if (h >= 16) return 1;
+        if (h >= 19 || h < 5) return 2;
+        if (h >= 17) return 1;
         return 0;
       }
       const s = this.score || 0;
-      // 450点ごとに 昼→夕→夜→昼… とループ（夜固定にならない）
-      return Math.floor(s / 450) % 3;
+      // 900点ごと・1周 2700。早切り替えしない
+      return Math.floor(s / 900) % 3;
+    },
+
+    /** 0..2 の連続値（フェード用） */
+    skyPhaseF() {
+      if (this.state === "menu" || this.state === "shop" || this.state === "loading") {
+        return this.skyPhase();
+      }
+      const s = this.score || 0;
+      const seg = 900;
+      const idx = Math.floor(s / seg) % 3;
+      const t = (s % seg) / seg;
+      // 最後の 15% で次フェーズへブレンド
+      const blendFrom = 0.85;
+      if (t < blendFrom) return idx;
+      const k = (t - blendFrom) / (1 - blendFrom);
+      return idx + k;
+    },
+
+    mixHex(a, b, t) {
+      const pa = parseInt(a.slice(1), 16);
+      const pb = parseInt(b.slice(1), 16);
+      const r = Math.round(((pa >> 16) & 255) * (1 - t) + ((pb >> 16) & 255) * t);
+      const g = Math.round(((pa >> 8) & 255) * (1 - t) + ((pb >> 8) & 255) * t);
+      const bl = Math.round((pa & 255) * (1 - t) + (pb & 255) * t);
+      return "#" + ((1 << 24) | (r << 16) | (g << 8) | bl).toString(16).slice(1);
+    },
+
+    skyColors() {
+      // コントラストを抑えめに（目疲れ対策）
+      const day = ["#c5e4ff", "#ffdcec", "#ffeecf"];
+      const dusk = ["#8a7ad0", "#f0a078", "#ffd8b0"];
+      const night = ["#2a2850", "#4a3870", "#7a4a80"];
+      const ph = this.skyPhaseF();
+      if (ph <= 0) return day;
+      if (ph >= 2) return night;
+      if (ph <= 1) {
+        const t = ph;
+        return [
+          this.mixHex(day[0], dusk[0], t),
+          this.mixHex(day[1], dusk[1], t),
+          this.mixHex(day[2], dusk[2], t),
+        ];
+      }
+      const t = ph - 1;
+      return [
+        this.mixHex(dusk[0], night[0], t),
+        this.mixHex(dusk[1], night[1], t),
+        this.mixHex(dusk[2], night[2], t),
+      ];
     },
 
     drawSky() {
       const phase = this.skyPhase();
+      const phF = this.skyPhaseF();
+      const nightAmt = Math.max(0, Math.min(1, phF - 1));
       const fever = this.feverActive;
+      const cols = this.skyColors();
       const sky = ctx.createLinearGradient(0, 0, 0, H);
       if (fever) {
-        sky.addColorStop(0, phase === 2 ? "#5a2060" : "#ffd0f0");
-        sky.addColorStop(0.5, phase === 2 ? "#a04060" : "#ffe0a0");
-        sky.addColorStop(1, phase === 2 ? "#402050" : "#ffb8d0");
-      } else if (phase === 0) {
-        sky.addColorStop(0, "#b8e0ff");
-        sky.addColorStop(0.45, "#ffd6ec");
-        sky.addColorStop(1, "#ffe8c8");
-      } else if (phase === 1) {
-        sky.addColorStop(0, "#7a6acd");
-        sky.addColorStop(0.45, "#ff9a6a");
-        sky.addColorStop(1, "#ffd0a0");
+        sky.addColorStop(0, this.mixHex(cols[0], "#ffd0f0", 0.55));
+        sky.addColorStop(0.5, this.mixHex(cols[1], "#ffe0a0", 0.55));
+        sky.addColorStop(1, this.mixHex(cols[2], "#ffb8d0", 0.55));
       } else {
-        sky.addColorStop(0, "#1a1840");
-        sky.addColorStop(0.55, "#3a2860");
-        sky.addColorStop(1, "#6a3a70");
+        sky.addColorStop(0, cols[0]);
+        sky.addColorStop(0.45, cols[1]);
+        sky.addColorStop(1, cols[2]);
       }
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, W, H);
 
-      // 星（夜）
-      if (phase === 2) {
+      // 星（夜成分に応じてフェードイン）
+      if (nightAmt > 0.05) {
         ctx.fillStyle = "rgba(255,255,220,0.85)";
-        for (let i = 0; i < 18; i++) {
-          const sx = ((i * 97 + 13) % 100) / 100 * W;
-          const sy = ((i * 53 + 7) % 55) / 100 * H;
-          const tw = 0.5 + 0.5 * Math.sin(this.time * 2 + i);
-          ctx.globalAlpha = 0.35 + tw * 0.5;
+        for (let i = 0; i < 16; i++) {
+          const sx = (((i * 97 + 13) % 100) / 100) * W;
+          const sy = (((i * 53 + 7) % 55) / 100) * H;
+          const tw = 0.5 + 0.5 * Math.sin(this.time * 1.5 + i);
+          ctx.globalAlpha = nightAmt * (0.25 + tw * 0.4);
           ctx.beginPath();
-          ctx.arc(sx, sy, 1.2 + (i % 3) * 0.4, 0, Math.PI * 2);
+          ctx.arc(sx, sy, 1.1 + (i % 3) * 0.3, 0, Math.PI * 2);
           ctx.fill();
         }
         ctx.globalAlpha = 1;
