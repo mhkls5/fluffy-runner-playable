@@ -1282,6 +1282,7 @@
     obstacles: [],
     coins: [],
     powerups: [],
+    boostPads: [],
     cameos: [],
     clouds: [],
     hills: [],
@@ -1292,6 +1293,9 @@
     cameoTimer: 4,
     powerTimer: 8,
     birdTimer: 7,
+    challenge: null, // { id, label, target, prog, reward, done }
+    challengeTimer: 0,
+    boostT: 0,
 
     layout() {
       this.groundY = H * 0.78;
@@ -1331,10 +1335,14 @@
       this.obstacles = [];
       this.coins = [];
       this.powerups = [];
+      this.boostPads = [];
       this.cameos = [];
       this.particles = [];
       this.floatTexts = [];
       this.spawnTimer = 1.2;
+      this.challenge = null;
+      this.challengeTimer = 8 + Math.random() * 6;
+      this.boostT = 0;
       this.shake = 0;
       this.coinCount = 0;
       this.coinFlash = 0;
@@ -2043,6 +2051,7 @@
       this.speed = this.baseSpeed + this.score * 1.25;
       const maxMul = this.feverActive ? 2.7 : 2.15;
       this.speed = Math.min(this.speed, this.baseSpeed * maxMul);
+      if (this.boostT > 0) this.speed *= 1.28;
       if (this.dash > 0) this.speed *= 1.35;
       this.worldOffset += this.speed * gdt;
 
@@ -2194,21 +2203,16 @@
       }
       if (this._riskActive > 0) this._riskActive -= dt;
 
-      // 障害物
+      // 障害物：単発ではなく「波」で出す（単調さ対策）
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
-        // 序盤ゆるい → 中盤標準 → 終盤きつい
         const s = this.score;
         let gap;
-        if (s < 100) {
-          gap = 1.0 + Math.random() * 0.4;
-        } else if (s < 350) {
-          gap = 0.78 + Math.random() * 0.4;
-        } else {
-          gap = 0.62 + Math.random() * 0.35 - Math.min(0.12, (s - 350) / 3000);
-        }
-        this.spawnTimer = Math.max(0.55, gap);
-        // 序盤は岩石を出さない
+        if (s < 100) gap = 1.05 + Math.random() * 0.4;
+        else if (s < 350) gap = 0.85 + Math.random() * 0.45;
+        else gap = 0.7 + Math.random() * 0.4;
+        this.spawnTimer = Math.max(0.65, gap);
+
         const kinds = s < 100 ? ["bush", "puddle"] : ["bush", "rock", "puddle"];
         const kind = kinds[Math.floor(Math.random() * kinds.length)];
         let w = 40,
@@ -2230,21 +2234,121 @@
           passed: false,
           nearDone: false,
         });
-        if (Math.random() < 0.42 && this.coins.length < 12) {
+
+        // 波: 短い間隔で 1〜2 個追加（リズムを作る）
+        const extra = Math.random() < (s < 150 ? 0.25 : 0.45) ? 1 : 0;
+        for (let e = 0; e < extra; e++) {
+          const k2 = kinds[Math.floor(Math.random() * kinds.length)];
+          let w2 = 40,
+            h2 = 36;
+          if (k2 === "rock") {
+            w2 = 34;
+            h2 = 42;
+          }
+          if (k2 === "puddle") {
+            w2 = 70;
+            h2 = 18;
+          }
+          this.obstacles.push({
+            kind: k2,
+            x: W + 30 + 90 + e * 85,
+            y: this.groundY - h2,
+            w: w2,
+            h: h2,
+            passed: false,
+            nearDone: false,
+          });
+        }
+
+        // コインは波の合間（障害物の後ろ側）に少しだけ
+        if (Math.random() < 0.4 && this.coins.length < 12) {
           const n = 2 + Math.floor(Math.random() * 2);
-          const arc = Math.random() < 0.5;
-          const baseY = this.groundY - (arc ? 95 : 55) - Math.random() * 40;
+          const baseY = this.groundY - 70 - Math.random() * 30;
           for (let i = 0; i < n; i++) {
-            const t = n === 1 ? 0.5 : i / (n - 1);
-            const lift = arc ? Math.sin(t * Math.PI) * 40 : 0;
             this.coins.push({
-              x: W + 40 + i * 34,
-              y: baseY - lift,
+              x: W + 50 + (extra ? 200 : 0) + i * 32,
+              y: baseY,
               r: 12,
               spin: Math.random() * Math.PI * 2,
               got: false,
             });
           }
+        }
+
+        // ブースト床（稀に）
+        if (s > 120 && Math.random() < 0.18 && this.boostPads.length < 2) {
+          this.boostPads.push({
+            x: W + 40,
+            y: this.groundY,
+            w: 90,
+            h: 14,
+            used: false,
+          });
+        }
+      }
+
+      // ブースト床
+      for (let i = this.boostPads.length - 1; i >= 0; i--) {
+        const b = this.boostPads[i];
+        b.x -= this.speed * gdt;
+        if (
+          !b.used &&
+          p.onGround &&
+          p.x + p.w > b.x &&
+          p.x < b.x + b.w &&
+          Math.abs(p.y + p.h - this.groundY) < 20
+        ) {
+          b.used = true;
+          this.boostT = 3.2;
+          this.speedLines = 1;
+          this.addScore(20, b.x, b.y - 30, "BOOST!", "#7dffa8");
+          this.notice = Playables.lang === "en" ? "BOOST! Speed up" : "ブースト！ スピードアップ";
+          this.noticeT = 1.2;
+          beep(523, 0.06, "square", 0.04);
+          setTimeout(() => beep(784, 0.1, "square", 0.035), 70);
+        }
+        if (b.x < -40) this.boostPads.splice(i, 1);
+      }
+      if (this.boostT > 0) this.boostT -= dt;
+
+      // ラン内チャレンジ
+      if (!this.challenge) {
+        this.challengeTimer -= dt;
+        if (this.challengeTimer <= 0 && this.score > 80) {
+          const pool =
+            Playables.lang === "en"
+              ? [
+                  { id: "combo12", label: "Combo x12", target: 12, reward: 35 },
+                  { id: "near3", label: "3 Near-misses", target: 3, reward: 30 },
+                  { id: "score800", label: "Reach 800 pts", target: 800, reward: 40 },
+                ]
+              : [
+                  { id: "combo12", label: "コンボ12を出す", target: 12, reward: 35 },
+                  { id: "near3", label: "ニアミス3回", target: 3, reward: 30 },
+                  { id: "score800", label: "800点に到達", target: 800, reward: 40 },
+                ];
+          const c = pool[Math.floor(Math.random() * pool.length)];
+          this.challenge = { ...c, prog: 0, done: false };
+          this.notice = (Playables.lang === "en" ? "Challenge: " : "チャレンジ: ") + c.label;
+          this.noticeT = 2;
+        }
+      }
+      if (this.challenge && !this.challenge.done) {
+        const c = this.challenge;
+        if (c.id === "combo12") c.prog = Math.max(c.prog, this.combo);
+        else if (c.id === "near3") c.prog = Math.min(c.target, this.nearMisses);
+        else if (c.id === "score800") c.prog = Math.floor(this.score);
+        if (c.prog >= c.target) {
+          c.done = true;
+          Playables.totalCoins += c.reward;
+          Playables.persist();
+          this.notice =
+            (Playables.lang === "en" ? "Challenge clear! +" : "チャレンジ達成！ +") +
+            c.reward +
+            "C";
+          this.noticeT = 2;
+          beep(880, 0.1, "triangle", 0.045);
+          setTimeout(() => beep(1175, 0.12, "triangle", 0.04), 100);
         }
       }
 
@@ -2771,6 +2875,7 @@
       }
 
       for (const u of this.powerups) this.drawPowerup(u);
+      for (const b of this.boostPads) this.drawBoostPad(b);
       for (const c of this.coins) this.drawCoin(c);
       for (const o of this.obstacles) this.drawObstacle(o);
       for (const b of this.birds) this.drawBird(b);
@@ -2887,6 +2992,35 @@
         ctx.ellipse(x + h.w / 2, this.groundY + 10, h.w / 2, h.h, 0, Math.PI, 0);
         ctx.fill();
       }
+    },
+
+    drawBoostPad(b) {
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      const pulse = 0.7 + Math.sin(this.time * 8) * 0.3;
+      ctx.fillStyle = b.used
+        ? "rgba(120,120,120,0.35)"
+        : `rgba(100,220,140,${0.55 + pulse * 0.25})`;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(0, -b.h, b.w, b.h, 6);
+      else ctx.fillRect(0, -b.h, b.w, b.h);
+      ctx.fill();
+      if (!b.used) {
+        ctx.fillStyle = "#fff";
+        for (let i = 0; i < 3; i++) {
+          const cx = 18 + i * 24;
+          ctx.beginPath();
+          ctx.moveTo(cx - 6, -b.h + 3);
+          ctx.lineTo(cx + 2, -b.h / 2 - 2);
+          ctx.lineTo(cx - 6, -3);
+          ctx.lineTo(cx + 4, -3);
+          ctx.lineTo(cx + 12, -b.h / 2 - 2);
+          ctx.lineTo(cx + 4, -b.h + 3);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      ctx.restore();
     },
 
     drawPowerup(u) {
@@ -4228,6 +4362,17 @@
           ctx.strokeStyle = `rgba(255,80,80,${a})`;
           ctx.lineWidth = 6;
           ctx.strokeRect(3, 3, W - 6, H - 6);
+        }
+
+        // ブースト中
+        if (this.boostT > 0) {
+          ctx.fillStyle = "#2a8a5a";
+          ctx.font = `bold ${Math.min(14, W * 0.032)}px sans-serif`;
+          ctx.fillText(
+            Playables.lang === "en" ? "BOOST" : "ブースト",
+            pad + 100,
+            pad + 28
+          );
         }
 
         if (this._forcePause) {
