@@ -1654,6 +1654,11 @@
       this.state = "over";
       this.shake = 14;
       this.hitFlash = 1;
+      // 物理・演出を即座に停止（フリーズ・固まり対策）
+      this.timeScale = 1;
+      this.slowmo = 0;
+      this.boostT = 0;
+      this.speed = this.baseSpeed;
       this.breakCombo();
       Music.setMode("over");
       setTimeout(() => {
@@ -1662,42 +1667,44 @@
       beep(220, 0.15, "sawtooth", 0.04);
       setTimeout(() => beep(160, 0.25, "sawtooth", 0.03), 120);
 
-      const final = Math.floor(this.score);
-      bumpMission("bestRunScore", final, true);
-      const rec = recordScore(final);
-      this._todayNew = rec.todayNew;
-      this._rank = rec.rank;
-      const sv = noteSurvive(final);
-      this._surviveInfo = sv;
-      const gained = Math.floor(this.coinCount * (1 + Playables.upCoin * 0.15) * equipAbil().coin);
-      if (this.coinCount > 0) gainSkinXp(Math.floor(this.coinCount * 0.25));
-      this._runCoinGain = gained;
-      this._doubleUsed = false;
-      await Playables.addCoins(gained);
-      if (final > Playables.bestScore) {
-        Playables.bestScore = final;
-        // ベスト更新時にゴーストを保存
-        if (this._ghostRec && this._ghostRec.length > 10) {
-          Playables.ghost = { score: final, ys: this._ghostRec.slice(0, 250) };
-        }
-        await Playables.persist();
-      }
-      // 今日のベスト更新ボーナス（1日1回）
-      if (this._todayNew) {
-        const bk = todayKey();
-        if (Playables.bestBonusDate !== bk || !Playables.bestBonusClaimed) {
-          Playables.bestBonusDate = bk;
-          Playables.bestBonusClaimed = true;
-          Playables.totalCoins += 50;
-          this.notice = Playables.lang === "en" ? "Today's best! +50C" : "今日のベスト更新！ +50C";
-          this.noticeT = 2;
+      try {
+        const final = Math.floor(this.score);
+        bumpMission("bestRunScore", final, true);
+        const rec = recordScore(final);
+        this._todayNew = rec.todayNew;
+        this._rank = rec.rank;
+        const sv = noteSurvive(final);
+        this._surviveInfo = sv;
+        const gained = Math.floor(this.coinCount * (1 + Playables.upCoin * 0.15) * equipAbil().coin);
+        if (this.coinCount > 0) gainSkinXp(Math.floor(this.coinCount * 0.25));
+        this._runCoinGain = gained;
+        this._doubleUsed = false;
+        await Playables.addCoins(gained);
+        if (final > Playables.bestScore) {
+          Playables.bestScore = final;
+          if (this._ghostRec && this._ghostRec.length > 10) {
+            Playables.ghost = { score: final, ys: this._ghostRec.slice(0, 250) };
+          }
           await Playables.persist();
         }
-      }
-      checkBadges(this);
-      this._overCount++;
-      if (this._overCount % 3 === 0) {
-        await Playables.showInterstitial();
+        if (this._todayNew) {
+          const bk = todayKey();
+          if (Playables.bestBonusDate !== bk || !Playables.bestBonusClaimed) {
+            Playables.bestBonusDate = bk;
+            Playables.bestBonusClaimed = true;
+            Playables.totalCoins += 50;
+            this.notice = Playables.lang === "en" ? "Today's best! +50C" : "今日のベスト更新！ +50C";
+            this.noticeT = 2;
+            await Playables.persist();
+          }
+        }
+        checkBadges(this);
+        this._overCount++;
+        if (this._overCount % 3 === 0) {
+          await Playables.showInterstitial();
+        }
+      } catch (e) {
+        console.warn("gameOver post-process", e);
       }
     },
 
@@ -5127,11 +5134,16 @@
 
   let last = performance.now();
   function frame(now) {
-    let dt = (now - last) / 1000;
-    last = now;
-    if (dt > 0.05) dt = 0.05;
-    Game.update(dt);
-    Game.draw();
+    try {
+      let dt = (now - last) / 1000;
+      last = now;
+      if (!(dt > 0)) dt = 0.016;
+      if (dt > 0.05) dt = 0.05;
+      Game.update(dt);
+      Game.draw();
+    } catch (e) {
+      console.warn("frame error", e);
+    }
     requestAnimationFrame(frame);
   }
 
