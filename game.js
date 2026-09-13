@@ -1891,8 +1891,8 @@
       const roll = Math.random();
       let type = forcedType || "cat";
       if (!forcedType) {
-        // おじさんは稀（保証出現＋クールタイムで制御）
-        if (roll < 0.06 && (this._uncleCd || 0) <= 0) type = "ojisan";
+        // おじさんはレア（保証は最初の数ランのみ）
+        if (roll < 0.04 && (this._uncleCd || 0) <= 0) type = "ojisan";
         else if (roll < 0.3) type = "grandma";
         else if (roll < 0.48) type = "frog";
         else if (roll < 0.66) type = "chicken";
@@ -1915,7 +1915,7 @@
           : this.groundY - 8;
       const spawnX =
         type === "ojisan"
-          ? W + 40 + Math.random() * 80
+          ? W + 20 + Math.random() * 140
           : fromLeft
             ? -80
             : W + 80;
@@ -2454,17 +2454,23 @@
       this.cameoTimer -= dt;
       if ((this._uncleCd || 0) > 0) this._uncleCd -= dt;
       const hasUncle = this.cameos.some((c) => c.type === "ojisan");
-      // 150点で1回保証（おじさん不在・クールタイム外のみ）
-      if (!this._uncleGuaranteed && !hasUncle && this.score > 150 && this.state === "playing") {
+      // 保証出現は最初の3ランだけ（おじさんに気づかせる）以降はレアランダム
+      if (
+        !this._uncleGuaranteed &&
+        !hasUncle &&
+        this.score > 180 &&
+        this.state === "playing" &&
+        (Playables.runs || 0) <= 3
+      ) {
         this._uncleGuaranteed = true;
         this.spawnCameo("ojisan");
-        this.cameoTimer = 12;
+        this.cameoTimer = 14;
       }
       // おじさん表示中は他のゲストを出さない
       const maxCameos = hasUncle ? 0 : 2;
       if (this.cameoTimer <= 0 && this.cameos.length < maxCameos) {
         this.spawnCameo();
-        this.cameoTimer = 7 + Math.random() * 9;
+        this.cameoTimer = 8 + Math.random() * 10;
       }
       for (let i = this.cameos.length - 1; i >= 0; i--) {
         const g = this.cameos[i];
