@@ -1947,11 +1947,11 @@
         this.shake = Math.max(this.shake, 5);
         this.speedLines = 1;
         this.addScore(50, W / 2, H * 0.3, "+50 " + t("ojisanBonus"), "#ffd56a");
-        for (let i = 0; i < 8; i++) {
-          if (this.coins.length >= 28) break;
+        for (let i = 0; i < 5; i++) {
+          if (this.coins.length >= 16) break;
           this.coins.push({
-            x: W + 20 + Math.random() * 120 + i * 22,
-            y: this.groundY - 40 - Math.random() * 140,
+            x: W + 20 + Math.random() * 80 + i * 24,
+            y: this.groundY - 40 - Math.random() * 100,
             r: 12,
             spin: Math.random() * 6,
             got: false,
@@ -2052,11 +2052,11 @@
         this._lastChest = chest;
         this.notice = Playables.lang === "en" ? "CHEST! Coins incoming" : "宝箱！ コインが降る";
         this.noticeT = 1.6;
-        for (let i = 0; i < 8; i++) {
-          if (this.coins.length >= 50) break;
+        for (let i = 0; i < 4; i++) {
+          if (this.coins.length >= 18) break;
           this.coins.push({
-            x: W + 30 + i * 28,
-            y: this.groundY - 50 - (i % 4) * 28,
+            x: W + 30 + i * 30,
+            y: this.groundY - 50 - (i % 3) * 26,
             r: 13,
             spin: Math.random() * 6,
             got: false,
@@ -2169,10 +2169,10 @@
         this.notice = Playables.lang === "en" ? "RISK ZONE! High coins" : "ハイリスク帯！ コインが多い";
         this.noticeT = 1.6;
         beep(330, 0.1, "sawtooth", 0.04);
-        for (let i = 0; i < 10; i++) {
-          if (this.coins.length >= 50) break;
+        for (let i = 0; i < 5; i++) {
+          if (this.coins.length >= 18) break;
           this.coins.push({
-            x: W + 40 + i * 30,
+            x: W + 40 + i * 32,
             y: this.groundY - 50 - (i % 3) * 36,
             r: 13,
             spin: Math.random() * 6,
@@ -2230,8 +2230,8 @@
           passed: false,
           nearDone: false,
         });
-        if (Math.random() < 0.75 && this.coins.length < 35) {
-          const n = 3 + Math.floor(Math.random() * 4);
+        if (Math.random() < 0.42 && this.coins.length < 12) {
+          const n = 2 + Math.floor(Math.random() * 2);
           const arc = Math.random() < 0.5;
           const baseY = this.groundY - (arc ? 95 : 55) - Math.random() * 40;
           for (let i = 0; i < n; i++) {
@@ -2488,11 +2488,12 @@
         // コインこぼし: 画面内のみ・上限あり・捕獲後は停止
         if (
           g.dropsCoins &&
+          g.type !== "ojisan" &&
           !g.caught &&
           g.x > 30 &&
           g.x < W - 20 &&
-          this.coins.length < 24 &&
-          Math.random() < dt * 0.9
+          this.coins.length < 10 &&
+          Math.random() < dt * 0.5
         ) {
           this.coins.push({
             x: g.x + (g.vx > 0 ? -10 : 10),
