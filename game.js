@@ -4597,22 +4597,23 @@
         prevY + 124
       );
 
-      // フォーカス操作ボタン
+      // フォーカス操作ボタン（当たり判定と位置を必ず同期）
+      this._shopBuyY = prevY + 150;
       if (this.shopFocus >= 0) {
         const fi = this.shopFocus;
         const sFi = SKINS[fi];
         const ownedF = Playables.owned[fi];
         const equipped = Playables.skin === fi;
         if (ownedF) {
-          if (!equipped) this.drawButton(W / 2, prevY + 150, 130, 38, t("equip"), "#ff8fb8", true);
+          if (!equipped) this.drawButton(W / 2, this._shopBuyY, 130, 38, t("equip"), "#ff8fb8", true);
         } else {
           const can = Playables.totalCoins >= sFi.cost;
-          this.drawButton(W / 2, prevY + 150, 180, 38, t("buy") + " " + sFi.cost + "C", can ? "#ff8fb8" : "#ccc", true);
+          this.drawButton(W / 2, this._shopBuyY, 180, 38, t("buy") + " " + sFi.cost + "C", can ? "#ff8fb8" : "#ccc", true);
         }
       } else {
         ctx.fillStyle = "rgba(70,50,80,0.65)";
         ctx.font = `${Math.min(11, W * 0.026)}px sans-serif`;
-        ctx.fillText(t("focusHint"), W / 2, prevY + 150);
+        ctx.fillText(t("focusHint"), W / 2, this._shopBuyY);
       }
 
       // --- 装備（ボタンと重ならないよう下げる） ---
@@ -4834,7 +4835,8 @@
       }
       // 中央の装備/購入ボタン
       if (Game.shopFocus >= 0) {
-        if (Math.abs(pt.x - W / 2) < 100 && Math.abs(pt.y - 380) < 28) {
+        const buyY = Game._shopBuyY != null ? Game._shopBuyY : 418;
+        if (Math.abs(pt.x - W / 2) < 110 && Math.abs(pt.y - buyY) < 32) {
           const fi = Game.shopFocus;
           if (Playables.owned[fi]) Game.focusSkin(fi);
           else Game.confirmBuySkin();
