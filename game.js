@@ -1289,7 +1289,7 @@
       this.cameos = [];
       this.particles = [];
       this.floatTexts = [];
-      this.spawnTimer = 1.6;
+      this.spawnTimer = 1.2;
       this.shake = 0;
       this.coinCount = 0;
       this.coinFlash = 0;
@@ -1563,11 +1563,13 @@
       }
     },
 
-    /** コイン 25 を払って 1 回だけ復活（広告の代わりに選べる） */
+    /** 序盤は死なせ、中盤以降だけ高額クラッチを許可 */
     tryClutch() {
       if (this.clutchUsed) return false;
-      if (Playables.totalCoins < 25) return false;
-      Playables.totalCoins -= 25;
+      // 序盤は即死（学習と緊張感）
+      if ((this.score || 0) < 250) return false;
+      if (Playables.totalCoins < 50) return false;
+      Playables.totalCoins -= 50;
       Playables.persist();
       this.clutchUsed = true;
       const p = this.player;
@@ -1576,12 +1578,12 @@
       p.onGround = true;
       p.jumps = 0;
       p.diving = false;
-      p.invuln = 2.2;
-      this.shield = Math.max(this.shield, 1);
-      this.obstacles = this.obstacles.filter((o) => o.x > this.player.x + 180);
-      this.birds = this.birds.filter((b) => b.x > this.player.x + 180);
+      p.invuln = 1.5;
+      // シールドは付けない（2度守りはしない）
+      this.obstacles = this.obstacles.filter((o) => o.x > this.player.x + 200);
+      this.birds = this.birds.filter((b) => b.x > this.player.x + 200);
       this.breakCombo();
-      this.notice = Playables.lang === "en" ? "CLUTCH! -25C revive" : "クラッチ！ -25C で復活";
+      this.notice = Playables.lang === "en" ? "CLUTCH! -50C revive" : "クラッチ！ -50C で復活";
       this.noticeT = 1.8;
       this.shake = 8;
       beep(392, 0.08, "triangle", 0.05);
@@ -1875,7 +1877,7 @@
         this.notice = Playables.lang === "en" ? "It's the uncle!!" : "あっ、おじさんだ！！";
         this.noticeT = 2.4;
         this.magnet = Math.max(this.magnet, 6);
-        this.shield = Math.max(this.shield, 1);
+        // シールドは付けない（無料盾が多すぎると死ななくなる）
         this.shake = Math.max(this.shake, 5);
         this.speedLines = 1;
         this.addScore(50, W / 2, H * 0.3, "+50 " + t("ojisanBonus"), "#ffd56a");
@@ -2110,16 +2112,16 @@
         // 序盤ゆるい → 中盤標準 → 終盤きつい
         const s = this.score;
         let gap;
-        if (s < 120) {
-          gap = 1.25 + Math.random() * 0.55;
-        } else if (s < 400) {
-          gap = 0.9 + Math.random() * 0.5 - Math.min(0.15, (s - 120) / 2000);
+        if (s < 100) {
+          gap = 1.0 + Math.random() * 0.4;
+        } else if (s < 350) {
+          gap = 0.78 + Math.random() * 0.4;
         } else {
-          gap = 0.7 + Math.random() * 0.4 - Math.min(0.18, (s - 400) / 2500);
+          gap = 0.62 + Math.random() * 0.35 - Math.min(0.12, (s - 350) / 3000);
         }
-        this.spawnTimer = Math.max(0.62, gap);
+        this.spawnTimer = Math.max(0.55, gap);
         // 序盤は岩石を出さない
-        const kinds = s < 150 ? ["bush", "puddle", "bush"] : ["bush", "rock", "puddle"];
+        const kinds = s < 100 ? ["bush", "puddle"] : ["bush", "rock", "puddle"];
         const kind = kinds[Math.floor(Math.random() * kinds.length)];
         let w = 40,
           h = 36;
