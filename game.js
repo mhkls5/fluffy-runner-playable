@@ -1851,17 +1851,31 @@
       }
       const fromLeft = Math.random() < 0.5;
       const scale = type === "ojisan" ? 1.15 : 0.85 + Math.random() * 0.25;
-      // おじさんは必ず「画面奥（右）」から左へ。後ろからは出さない
-      // （プレイヤーは画面左固定のため、後ろからは追いつけない）
-      const spawnX = type === "ojisan" ? W + 60 : fromLeft ? -80 : W + 80;
+      // おじさんは前から来るが、高さと出現Xを毎回変える
+      const uncleLane = type === "ojisan" ? Math.floor(Math.random() * 3) : 0; // 0地面 1中 2高
+      const laneY =
+        type === "ojisan"
+          ? uncleLane === 0
+            ? this.groundY - 8
+            : uncleLane === 1
+              ? this.groundY - 72
+              : this.groundY - 130
+          : this.groundY - 8;
+      const spawnX =
+        type === "ojisan"
+          ? W + 40 + Math.random() * 80
+          : fromLeft
+            ? -80
+            : W + 80;
       const spawnVx =
         type === "ojisan"
-          ? -(this.speed * 0.48 + 30)
+          ? -(this.speed * (0.42 + Math.random() * 0.12) + 25)
           : (fromLeft ? 1 : -1) * (this.speed * 0.55 + 40 + Math.random() * 50);
       this.cameos.push({
         type,
         x: spawnX,
-        y: this.groundY - 8,
+        y: laneY,
+        lane: uncleLane,
         vx: spawnVx,
         scale,
         bob: Math.random() * 6,
@@ -2378,8 +2392,11 @@
         // おじさんは左へ進む（プレイヤーに近づく）。掴めないと徐々に加速して逃げる
         if (g.chaseable && !g.caught) {
           g.escapeT = (g.escapeT || 0) + gdt;
-          const boost = g.escapeT > 3.5 ? 1.35 : 1;
-          g.vx = -(this.speed * 0.48 + 30) * boost;
+          const boost = g.escapeT > 4 ? 1.3 : 1;
+          g.vx = -(this.speed * 0.46 + 28) * boost;
+          // 空中レーンはふわふわ浮く
+          if (g.lane === 1) g.y = this.groundY - 72 + Math.sin(this.time * 3.2) * 10;
+          if (g.lane === 2) g.y = this.groundY - 130 + Math.sin(this.time * 2.6) * 14;
         }
         g.x += g.vx * gdt;
         g.bob += dt * g.bobSpeed;
