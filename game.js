@@ -1420,11 +1420,13 @@
     },
 
     triggerSlowmo() {
-      this.slowmo = 0.38;
-      this.timeScale = 0.35;
-      this.speedLines = 1;
-      this.shake = Math.max(this.shake, 4);
-      beep(1400, 0.06, "sine", 0.04);
+      // 連続ニアミスで緑が残らないよう、実行中は延長しない
+      if (this.slowmo > 0.08) return;
+      this.slowmo = 0.22;
+      this.timeScale = 0.45;
+      this.speedLines = Math.max(this.speedLines, 0.6);
+      this.shake = Math.max(this.shake, 3);
+      beep(1400, 0.05, "sine", 0.035);
     },
 
     addScore(n, x, y, label, color) {
@@ -1870,7 +1872,7 @@
       if (type === "ojisan") {
         // ★イベント化：おじさんボーナス＋追跡
         this._sawUncle = true;
-        this.notice = Playables.lang === "en" ? "Touch the uncle!" : "おじさんに触れよう！";
+        this.notice = Playables.lang === "en" ? "It's the uncle!!" : "あっ、おじさんだ！！";
         this.noticeT = 2.4;
         this.magnet = Math.max(this.magnet, 6);
         this.shield = Math.max(this.shield, 1);
@@ -2651,10 +2653,12 @@
         }
       }
 
-      // スローモ・フィーバーの枠
-      if (this.slowmo > 0) {
-        ctx.fillStyle = `rgba(125,255,168,${this.slowmo * 0.25})`;
-        ctx.fillRect(0, 0, W, H);
+      // スローモはごく薄い縁取りのみ（全面ベタは残像に見える）
+      if (this.slowmo > 0.02) {
+        const a = Math.min(0.12, this.slowmo * 0.35);
+        ctx.strokeStyle = `rgba(125,255,168,${a})`;
+        ctx.lineWidth = 10;
+        ctx.strokeRect(2, 2, W - 4, H - 4);
       }
       if (this.feverActive) {
         const pulse = 0.35 + Math.sin(this.time * 8) * 0.15;
@@ -3983,7 +3987,8 @@
                 : "#ff8fb8";
           ctx.fillRect(pad, pad + 88, 80 * comboT, 6);
         }
-        if (this.nearChain >= 2) {
+        if (this.nearChain >= 2 && this.nearChainT > 0.3) {
+          ctx.globalAlpha = Math.min(1, this.nearChainT);
           ctx.fillStyle = "#2a8a5a";
           ctx.font = `bold ${Math.min(16, W * 0.038)}px sans-serif`;
           ctx.fillText(
@@ -3991,6 +3996,7 @@
             pad,
             pad + 108
           );
+          ctx.globalAlpha = 1;
         }
 
         // フィーバーバー
