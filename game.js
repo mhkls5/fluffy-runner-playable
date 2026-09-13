@@ -1383,6 +1383,8 @@
       this._uncleGuaranteed = false;
       this._caughtUncle = 0;
       this._uncleCd = 0;
+      // 1ラン1回は出るが、出現点数は毎回ランダム（予測不能にする）
+      this._uncleAt = 200 + Math.floor(Math.random() * 220);
       this._lastChest = 0;
       this._surviveInfo = null;
       this._ghostRec = [];
@@ -1909,7 +1911,7 @@
       let type = forcedType || "cat";
       if (!forcedType) {
         // おじさんはレア（保証は最初の数ランのみ）
-        if (roll < 0.04 && (this._uncleCd || 0) <= 0) type = "ojisan";
+        if (roll < 0.05 && (this._uncleCd || 0) <= 0) type = "ojisan";
         else if (roll < 0.3) type = "grandma";
         else if (roll < 0.48) type = "frog";
         else if (roll < 0.66) type = "chicken";
@@ -2565,17 +2567,16 @@
       this.cameoTimer -= dt;
       if ((this._uncleCd || 0) > 0) this._uncleCd -= dt;
       const hasUncle = this.cameos.some((c) => c.type === "ojisan");
-      // 保証出現は最初の3ランだけ（おじさんに気づかせる）以降はレアランダム
+      // 1ラン1回: ランダムな点数帯でおじさん出現
       if (
         !this._uncleGuaranteed &&
         !hasUncle &&
-        this.score > 180 &&
-        this.state === "playing" &&
-        (Playables.runs || 0) <= 3
+        this.score > (this._uncleAt || 220) &&
+        this.state === "playing"
       ) {
         this._uncleGuaranteed = true;
         this.spawnCameo("ojisan");
-        this.cameoTimer = 14;
+        this.cameoTimer = 16;
       }
       // おじさん表示中は他のゲストを出さない
       const maxCameos = hasUncle ? 0 : 2;
