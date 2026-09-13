@@ -4036,6 +4036,8 @@
           "#b8a9d4",
           true
         );
+        // 以降は how ボタンの下から積む（重なり防止）
+        this._menuStackY = howY + 26;
 
         // 今日のチャレンジ（その下）
         const tb = Playables.todayBest || 0;
@@ -4072,9 +4074,9 @@
           howY + 60
         );
 
+        this.drawNextGoal();
         this.drawMissionPanel();
         this.drawTopScores();
-        this.drawNextGoal();
       }
 
       if (this.state === "shop") {
@@ -4298,8 +4300,8 @@
     drawNextGoal() {
       const g = nextUnlockGoal();
       if (!g) return;
-      const pad = Math.min(16, W * 0.04);
-      const top = Math.min(H * 0.72, H - 150);
+      const top = (this._menuStackY || H * 0.7) + 4;
+      if (top + 48 > H - 8) return;
       const w = Math.min(W * 0.92, 360);
       const h = 44;
       ctx.fillStyle = "rgba(255,240,200,0.9)";
@@ -4328,15 +4330,16 @@
           top + 26
         );
       }
+      this._menuStackY = top + h + 10;
     },
 
     drawTopScores() {
       const scores = Playables.topScores || [];
       if (!scores.length) return;
-      const pad = Math.min(16, W * 0.04);
-      const top = Math.min(H * 0.82, H - 110);
+      const top = (this._menuStackY || H * 0.8) + 2;
       const w = Math.min(W * 0.92, 360);
-      const h = 28 + scores.length * 20;
+      const h = Math.min(28 + scores.length * 18, Math.max(40, H - top - 12));
+      if (top + 30 > H - 4) return;
       ctx.fillStyle = "rgba(255,255,255,0.82)";
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(W / 2 - w / 2, top, w, h, 12);
@@ -4346,23 +4349,24 @@
       ctx.textAlign = "left";
       ctx.font = `bold ${Math.min(12, W * 0.028)}px sans-serif`;
       ctx.fillText(Playables.lang === "en" ? "TOP SCORES" : "ランキング", W / 2 - w / 2 + 12, top + 18);
-      ctx.textAlign = "right";
-      ctx.font = `${Math.min(12, W * 0.028)}px sans-serif`;
-      for (let i = 0; i < scores.length; i++) {
-        const y = top + 36 + i * 18;
-        ctx.textAlign = "left";
+      const maxN = Math.min(scores.length, Math.max(0, Math.floor((h - 28) / 18)));
+      for (let i = 0; i < maxN; i++) {
+        const y = top + 34 + i * 18;
         ctx.fillStyle = i === 0 ? "#c07000" : "#5a4a5a";
         ctx.fillText((i + 1) + ".  " + scores[i], W / 2 - w / 2 + 16, y);
       }
+      this._menuStackY = top + h;
     },
 
     drawMissionPanel() {
       ensureDailyMissions();
-      const pad = Math.min(16, W * 0.04);
-      const top = H * 0.46;
+      const top = (this._menuStackY || H * 0.46) + 2;
       const panelW = Math.min(W * 0.92, 380);
-      const rowH = Math.min(64, (H - top - 70) / 3);
-      const panelH = 48 + rowH * 3 + 8 + (allDailyDone() ? rowH : 0);
+      const rows = 3 + (allDailyDone() ? 1 : 0);
+      const maxH = Math.max(80, H - top - 8);
+      const rowH = Math.min(56, Math.max(36, (maxH - 52) / rows));
+      const panelH = 44 + rowH * rows + 6;
+      if (top + 40 > H - 4) return;
 
       ctx.fillStyle = "rgba(255,255,255,0.9)";
       ctx.beginPath();
@@ -4448,6 +4452,7 @@
           y + 22
         );
       }
+      this._menuStackY = top + panelH + 8;
     },
 
     drawShop() {
